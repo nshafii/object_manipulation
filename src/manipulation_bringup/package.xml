@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<package>
+  <name>manipulation_bringup</name>
+  <version>1.0.0</version>
+  <description>The manipulation_bringup package</description>
+
+  <maintainer email="nima@inesctec.pt">Nima Shafii</maintainer>
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <export>
+  </export>
+</package>
