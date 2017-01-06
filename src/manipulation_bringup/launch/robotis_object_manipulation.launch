@@ -1,10 +1,16 @@
 <launch>
-	<include file="$(find INESC_Robotis_Driver)/launch/robot_init.launch"/>    
-	
 	<!-- Launch file with all available skills -->
+	
 	<include file="$(find openni2_launch)/launch/openni2.launch"/>	
+	
+	<include file="$(find INESC_Robotis_Driver)/launch/robot_init.launch"/>    
 
+	<!-- node pkg="tf" type="static_transform_publisher" name="static_transform_publisher" args="-0.28 0.63 0.68 -0.48 0.7 -0.0  /world /camera_link 1000"/-->
 
-	<node pkg="tf" type="static_transform_publisher" name="static_transform_publisher" args="-0.28 0.63 0.68 -0.48 0.7 -0.0  /world /camera_link 100"/>
+	<node pkg="tf" type="static_transform_publisher" name="static_transform_publisher" args="-0.28 0.63 0.70 -0.48 0.7 -0.0  /world /camera_link 1000"/>
+
 	<node pkg="rviz" type="rviz" name="rviz"/>
+
+	<node pkg="preprocessing" type="preprocessing" name="preprocessing"/>
+
 </launch>
