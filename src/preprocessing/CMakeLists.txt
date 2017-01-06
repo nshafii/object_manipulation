@@ -11,6 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
 	rospy
 	roscpp
 	tf
+	pcl_ros
     	tf2_ros
 	geometry_msgs
 	sensor_msgs	
@@ -29,11 +30,11 @@ include_directories(include
 	${PCL_INCLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS}) 
 
-#catkin_package(
-#  INCLUDE_DIRS include
-#  LIBRARIES INESC_Robotis_Driver
-#  CATKIN_DEPENDS message_runtime
-# )
+catkin_package(
+  INCLUDE_DIRS include
+  LIBRARIES preprocessing
+  CATKIN_DEPENDS message_runtime
+ )
 
 #add_library(INESC_Robotis_Driver
 #src/IK_Solver.cpp
