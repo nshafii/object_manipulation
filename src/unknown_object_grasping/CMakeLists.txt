@@ -25,6 +25,10 @@ find_package(catkin REQUIRED COMPONENTS
 
 #find_package(Boost REQUIRED system filesystem date_time thread)
 
+add_service_files(FILES GraspingNearestObject.srv)
+
+generate_messages(DEPENDENCIES std_msgs)
+
 #Build talker and listener
 include_directories(include 
 	${catkin_INCLUDE_DIRS} 
