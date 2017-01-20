@@ -24,7 +24,7 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 #find_package(Boost REQUIRED system filesystem date_time thread)
-
+find_package(Eigen REQUIRED)
 add_service_files(FILES GraspingNearestObject.srv)
 
 generate_messages(DEPENDENCIES std_msgs)
@@ -32,6 +32,7 @@ generate_messages(DEPENDENCIES std_msgs)
 #Build talker and listener
 include_directories(include 
 	${catkin_INCLUDE_DIRS} 
+	${Eigen_INCLUDE_DIRS}
 	${PCL_INCLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS}) 
 
@@ -46,11 +47,11 @@ catkin_package(
 #src/GoToPose_service.cpp
 #src/TrajectoryGenerator.cpp)
 
-#target_link_libraries(INESC_Robotis_Driver ${catkin_LIBRARIES})
+#target_link_libraries(unknown_object_grasping  ${catkin_LIBRARIES})
 
 ## Declare a C++ executable
 add_executable(unknown_object_grasping src/unknown_object_grasping.cpp)
-target_link_libraries(unknown_object_grasping ${catkin_LIBRARIES})
+target_link_libraries(unknown_object_grasping ${Eigen_LIBRARIES} ${catkin_LIBRARIES})
 add_dependencies(unknown_object_grasping unknown_object_grasping_gencpp)
 
 

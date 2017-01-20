@@ -4,7 +4,7 @@
 //tf includes
 #include <tf/tf.h>
 #include <tf/transform_listener.h>
-#include <tf_conversions/tf_eigen.h>
+//#include <tf_conversions/tf_eigen.h>
 
 //PCL includes
 #include <pcl/point_cloud.h>
@@ -26,6 +26,7 @@
 
 //Arm driver includes
 #include "INESC_Robotis_Driver/SetToolPose.h"
+#include "INESC_Robotis_Driver/GetToolPose.h"
 #include "INESC_Robotis_Driver/HomeArm.h"
 
 // visualization
@@ -35,11 +36,35 @@
 
 #include <unknown_object_grasping/GraspingNearestObject.h>
 
+typedef struct {
+	bool sideStrategy, topStrategy, flatStrategy;
+} grasp_strategy;
+
+typedef struct{
+	geometry_msgs::Point leftPoint;
+	geometry_msgs::Point rightPoint;
+} grasp_width;
 
 ros::ServiceClient setToolPosSrv;
+ros::ServiceClient getToolPosSrv;
 Eigen::Vector3d graspPose;
 Eigen::Affine3d objectPose;
 double orientation;
+
+ros::ServiceClient client;
+
+INESC_Robotis_Driver::HomeArm srv;
+
+
+//bool sideStrategy, topStrategy, flatStrategy;
+grasp_strategy grasp = {false, false , false};
+grasp_width grasp_pose;
+
+Eigen::Vector3d vectorTFToEigen(tf::Vector3 pos_tf){
+	Eigen::Vector3d pos_eigen;
+	pos_eigen<< pos_tf.x(),pos_tf.y(),pos_tf.z();
+	return pos_eigen;
+}
 
 void ObjectCentericFrameRelatedToTable(
 		const pcl::PointCloud<pcl::PointXYZ>& target_pc,
@@ -160,8 +185,8 @@ void ObjectCentericFrameRelatedToTable(
 
       }
 
-      if(countMinus < countPositive){
-
+      //if(countMinus < countPositive){
+      if(orientation < M_PI/2 and orientation > -M_PI/2){
               pcl::copyPointCloud(*transforemedCloudTemp, transformed_cloud);
 
       }
@@ -184,23 +209,18 @@ void ObjectCentericFrameRelatedToTable(
 
 }
 
-
-
 void graspStrategyAndPointDetection(
 		const pcl::PointCloud<pcl::PointXYZ>& target_pc)
-
 		{
 	double LENGTH_PROPER = 0.05; //this is under discussion and unknown
 
 	int orientationCorrection = 1; // this is for sign anbiguty
 
-	bool sideStrategy, topStrategy, flatStrategy;
+
 
 	std::vector<geometry_msgs::Point> objectPointCloud;
 
-	geometry_msgs::Point leftPoint;
 
-	geometry_msgs::Point rightPoint;
 
 
 	// calculate the dimension of bounding box
@@ -216,7 +236,6 @@ void graspStrategyAndPointDetection(
 	objectPointCloud.clear();
 
 	for (unsigned int i = 0; i < target_pc.points.size(); i++)
-
 	{
 
 		double X = target_pc.points.at(i).x;
@@ -273,17 +292,17 @@ void graspStrategyAndPointDetection(
 
 	// Analyze the face of the object related to view Point grasp horizontally
 
-	if (zDimention + 0.03 > yDimention && zDimention + 0.04 > xDimention)
+	if (zDimention + 0.03 > yDimention && zDimention + 0.04 > xDimention && zDimention > 0.02)
 
 	{
 
 		ROS_INFO("Z is the principle axis");
 
-		sideStrategy = true;
+		grasp.sideStrategy = true;
 
-		topStrategy = false;
+		grasp.topStrategy = false;
 
-		flatStrategy = false;
+		grasp.flatStrategy = false;
 
 		double zInterval = zDimention / devisionSize;
 
@@ -362,42 +381,55 @@ void graspStrategyAndPointDetection(
 			ROS_INFO("minXDimention, Sector founds [%i]: %f ", foundIter,
 					minXDimention);
 
-			ROS_INFO("size Point Cloud= %i .size transferred= %i",
+			ROS_INFO("size Point Cloud= %i .size transferred= %d",
 					target_pc.points.size(), objectPointCloud.size());
 
 			// ToDo Should be fixed
 
-			leftPoint.z = ((foundIter + 0.5) * zInterval) + minZ;
+			grasp_pose.leftPoint.x = minX;
 
-			rightPoint.z = ((foundIter + 0.5) * zInterval) + minZ;
+			grasp_pose.rightPoint.x = minX;
 
-			leftPoint.y = orientationCorrection * yDimention / 2;
+			grasp_pose.leftPoint.y = minY;
 
-			rightPoint.y = orientationCorrection * yDimention / 2;
+			grasp_pose.rightPoint.y = maxY;
 
-			leftPoint.x = fabs(maxArray[foundIter] - minArray[foundIter]) / 2;
+			grasp_pose.leftPoint.z = (minZ + maxZ)/2;
 
-			rightPoint.x = -1 * fabs(maxArray[foundIter] - minArray[foundIter])
-					/ 2;
+			grasp_pose.rightPoint.z = (minZ + maxZ)/2;
+
+//			grasp_pose.leftPoint.z = ((foundIter + 0.5) * zInterval) + minZ;
+//
+//			grasp_pose.rightPoint.z = ((foundIter + 0.5) * zInterval) + minZ;
+//
+//			grasp_pose.leftPoint.y = orientationCorrection * yDimention / 2;
+//
+//			grasp_pose.rightPoint.y = orientationCorrection * yDimention / 2;
+//
+//			grasp_pose.leftPoint.x = fabs(maxArray[foundIter] - minArray[foundIter]) / 2;
+//
+//			grasp_pose.rightPoint.x = -1 * fabs(maxArray[foundIter] - minArray[foundIter])
+//					/ 2;
 
 		}
 
 	}
 
 	// Analyze the face of the object related to view Point grasp vertical
-
+//
+//	else if (xDimention > (zDimention + 0.02)
+//			&& yDimention > (zDimention + 0.02))
 	else if (xDimention > (zDimention + 0.02)
-			&& yDimention > (zDimention + 0.02))
-
+				&& yDimention > 0.14)
 			{
 
 		ROS_INFO(" flat object , x and y are the principale axis");
 
-		flatStrategy = true;
+		grasp.flatStrategy = true;
 
-		sideStrategy = false;
+		grasp.sideStrategy = false;
 
-		topStrategy = false;
+		grasp.topStrategy = false;
 
 		double xInterval = xDimention / devisionSize;
 
@@ -478,18 +510,30 @@ void graspStrategyAndPointDetection(
 
 		// ToDo Should be fixed
 
-		leftPoint.x = ((foundIter + 0.5) * xInterval) + minX;
+		grasp_pose.leftPoint.x = minX;
 
-		rightPoint.x = ((foundIter + 0.5) * xInterval) + minX;
+		grasp_pose.rightPoint.x = minX;
 
-		leftPoint.y = orientationCorrection * yDimention / 2;
+		grasp_pose.leftPoint.y = (maxY + minY)/2;
 
-		rightPoint.y = orientationCorrection * yDimention / 2;
+		grasp_pose.rightPoint.y = (maxY + minY)/2;
 
-		leftPoint.z = fabs(maxArray[foundIter] - minArray[foundIter]) / 2;
-		;
+		grasp_pose.leftPoint.z = minZ;
 
-		rightPoint.z = -1 * fabs(maxArray[foundIter] - minArray[foundIter]) / 2;
+		grasp_pose.rightPoint.z = maxZ;
+
+//		grasp_pose.leftPoint.x = ((foundIter + 0.5) * xInterval) + minX;
+//
+//		grasp_pose.rightPoint.x = ((foundIter + 0.5) * xInterval) + minX;
+//
+//		grasp_pose.leftPoint.y = orientationCorrection * yDimention / 2;
+//
+//		grasp_pose.rightPoint.y = orientationCorrection * yDimention / 2;
+//
+//		grasp_pose.leftPoint.z = fabs(maxArray[foundIter] - minArray[foundIter]) / 2;
+//
+//
+//		grasp_pose.rightPoint.z = -1 * fabs(maxArray[foundIter] - minArray[foundIter]) / 2;
 
 	}
 
@@ -499,11 +543,11 @@ void graspStrategyAndPointDetection(
 
 		ROS_INFO(" x is the principale axis");
 
-		topStrategy = true;
+		grasp.topStrategy = true;
 
-		sideStrategy = false;
+		grasp.sideStrategy = false;
 
-		flatStrategy = false;
+		grasp.flatStrategy = false;
 
 		double xInterval = xDimention / devisionSize;
 
@@ -582,18 +626,28 @@ void graspStrategyAndPointDetection(
 				target_pc.points.size(), objectPointCloud.size());
 
 		// ToDo Should be fixed
+		grasp_pose.leftPoint.x = (maxX + minX)/2;
 
-		leftPoint.x = ((foundIter + 0.5) * xInterval) + minX;
+		grasp_pose.rightPoint.x = (maxX + minX)/2;
 
-		rightPoint.x = ((foundIter + 0.5) * xInterval) + minX;
+		grasp_pose.leftPoint.y = minY;
 
-		leftPoint.y = fabs(maxArray[foundIter] - minArray[foundIter]) / 2;
+		grasp_pose.rightPoint.y = maxY;
 
-		rightPoint.y = -1 * fabs(maxArray[foundIter] - minArray[foundIter]) / 2;
+		grasp_pose.leftPoint.z = zDimention / 2;
 
-		leftPoint.z = zDimention / 2;
-
-		rightPoint.z = zDimention / 2;
+		grasp_pose.rightPoint.z = zDimention / 2;
+//		grasp_pose.leftPoint.x = ((foundIter + 0.5) * xInterval) + minX;
+//
+//		grasp_pose.rightPoint.x = ((foundIter + 0.5) * xInterval) + minX;
+//
+//		grasp_pose.leftPoint.y = fabs(maxArray[foundIter] - minArray[foundIter]) / 2;
+//
+//		grasp_pose.rightPoint.y = -1 * fabs(maxArray[foundIter] - minArray[foundIter]) / 2;
+//
+//		grasp_pose.leftPoint.z = zDimention / 2;
+//
+//		grasp_pose.rightPoint.z = zDimention / 2;
 
 	}
 
@@ -621,6 +675,62 @@ void CalcAverageDistToBase(const pcl::PointCloud<pcl::PointXYZ>& cloud,
 	average.y() = average_y / cloud.points.size();
 	average.z() = average_z / cloud.points.size();
 
+}
+
+
+bool checkTheArmCloud(pcl::PointCloud<pcl::PointXYZ>& cloud_cluster, tf::TransformListener& tf_linsener){
+	tf_linsener.waitForTransform("world", "end_effector",
+						ros::Time(0), ros::Duration(4));
+	tf::StampedTransform transform_world_end;
+
+	tf_linsener.lookupTransform("world",
+						"end_effector", ros::Time(0),
+						transform_world_end);
+	Eigen::Vector3d end_eff_Pos = vectorTFToEigen(transform_world_end.getOrigin());
+
+	tf::StampedTransform transform_world_Link5;
+	tf_linsener.lookupTransform("world",
+						"link5", ros::Time(0),
+						transform_world_Link5);
+	Eigen::Vector3d link5_Pos = vectorTFToEigen(transform_world_Link5.getOrigin());
+
+	std::cout<<"world-Link5: "<< transform_world_Link5.getOrigin().x()<<std::endl;
+
+
+	tf::StampedTransform transform_world_Link4;
+	tf_linsener.lookupTransform("world",
+						"link4", ros::Time(0),
+						transform_world_Link4);
+
+	Eigen::Vector3d link4_Pos = vectorTFToEigen(transform_world_Link4.getOrigin());
+
+
+	Eigen::Vector3d cloud_CoM;
+	CalcAverageDistToBase(cloud_cluster, cloud_CoM);
+
+	if((cloud_CoM-link5_Pos).norm() < (end_eff_Pos-link5_Pos).norm()
+			and
+			(cloud_CoM-end_eff_Pos).norm()<(end_eff_Pos-link5_Pos).norm()){
+		ROS_INFO("segmenting out the arm cloud of last link");
+		return true;
+	}
+
+	double gripperDist = 0.06;
+	if((cloud_CoM-end_eff_Pos).norm()<gripperDist ){
+		ROS_INFO("segmenting out the griper cloud");
+		return true;
+	}
+
+
+	if((cloud_CoM-link4_Pos).norm() < (link4_Pos-link5_Pos).norm()
+			and
+			(cloud_CoM-link5_Pos).norm()<(link4_Pos-link5_Pos).norm()){
+		ROS_INFO("segmenting out the arm cloud of link");
+		return true;
+	}
+
+
+	return false;
 }
 
 void SortDistToBase(
@@ -747,36 +857,101 @@ bool graspNearestObject(unknown_object_grasping::GraspingNearestObject::Request 
 unknown_object_grasping::GraspingNearestObject::Response &res)
 {
 
-	Eigen::Vector3d objectPosition = objectPose.translation();
-	//CalcAverageDistToBase(*object_clustered_point, center);
-	Eigen::Vector3d behind;
-	behind<<-0.1, 0, 0;
 
-	graspPose = objectPosition + behind;
-	//center.x() = 0.5; //center.x() - 0.15;
+	//Eigen::Vector3d objectPosition = objectPose.translation();
+//	if (client.call(srv)) {
+//		ROS_INFO("calling home pose");
+//	} else {
+//		ROS_ERROR("calling homePose");
+//		return 1;
+//	}
 
-	//std::cout << center;
+//	INESC_Robotis_Driver::SetToolPose initialPos;
+//	initialPos.request.pos_x = 0.30;
+//	initialPos.request.pos_y = 0.0;
+//	initialPos.request.pos_z = 0.28;
+//	initialPos.request.Yaw_angle_z = 3.14 ;
+//	initialPos.request.Pitch_angle_y = 1.54;
+//	initialPos.request.Roll_angle_x = 0;//orientation;
+//	initialPos.request.linear_velocity = 0.05;
+//
+//	if (setToolPosSrv.call(initialPos)) {
+//
+//		ROS_INFO("calling set toll Pose");
+//	} else {
+//		ROS_ERROR("calling set toll Pose");
+//		return 1;
+//	}
 
-	//objects_clustered_points.clear();
 
-	INESC_Robotis_Driver::SetToolPose srv2;
+	Eigen::Vector3d matchedPoint((grasp_pose.leftPoint.x+grasp_pose.rightPoint.x)/2,
+			(grasp_pose.leftPoint.y+grasp_pose.rightPoint.y)/2,
+			(grasp_pose.leftPoint.z+grasp_pose.rightPoint.z)/2);
 
-	srv2.request.pos_x = graspPose.x();
-	srv2.request.pos_y = graspPose.y();
-	srv2.request.pos_z = graspPose.z();
-	srv2.request.Yaw_angle_z = 3.14;
-	srv2.request.Pitch_angle_y = 1.57;
-	srv2.request.Roll_angle_x = orientation;
-	srv2.request.linear_velocity = 0.1;
+	Eigen::Vector3d graspPosition = objectPose * matchedPoint;
 
-	ROS_INFO ( "Go to Grasp Pose ( %f , %f , %f )", graspPose.x(), graspPose.y(), graspPose.z() );
+	if(grasp.sideStrategy){
+		ROS_INFO("Executing Side Strategy");
+		double distBehind = 0.07;
+		Eigen::Vector3d behindVec;
+		behindVec<< -distBehind , 0, 0;
+		Eigen::Vector3d behindPosition = graspPosition + (objectPose.linear()*behindVec);
 
-	if (setToolPosSrv.call(srv2)) {
+		INESC_Robotis_Driver::SetToolPose srv2;
 
-		ROS_INFO("calling set toll Pose");
-	} else {
-		ROS_ERROR("calling set toll Pose");
-		return 1;
+		srv2.request.pos_x = behindPosition.x();
+		srv2.request.pos_y = behindPosition.y();
+		srv2.request.pos_z = behindPosition.z();
+		srv2.request.Yaw_angle_z = 3.14;
+		srv2.request.Pitch_angle_y = 1.57;
+
+		double yawOrientation = -1* atan2(objectPose(0,1), objectPose(1,1));
+
+		if(yawOrientation > 0.6) yawOrientation = 0.6;
+//
+		if(yawOrientation < -0.6) yawOrientation = -0.6;
+
+		srv2.request.Roll_angle_x = yawOrientation;//orientation;
+		srv2.request.linear_velocity = 0.05;
+
+		ROS_INFO ( "Go to Grasp Pose ( %f , %f , %f )", behindPosition.x(), behindPosition.y(), behindPosition.z() );
+
+		if (setToolPosSrv.call(srv2)) {
+
+			ROS_INFO("calling set toll Pose");
+		} else {
+			ROS_ERROR("calling set toll Pose");
+			return 1;
+		}
+	}
+
+	if(	grasp.topStrategy){
+		ROS_INFO("Executing Top Strategy");
+		double distBehind = 0.07;
+		Eigen::Vector3d behindVec;
+		behindVec<< 0 , 0, distBehind;
+		Eigen::Vector3d behindPosition = graspPosition + behindVec;
+
+		INESC_Robotis_Driver::SetToolPose srv2;
+
+		srv2.request.pos_x = behindPosition.x();
+		srv2.request.pos_y = behindPosition.y();
+		srv2.request.pos_z = behindPosition.z();
+		srv2.request.Yaw_angle_z = 3.14 - (-1*atan2(objectPose(0,1), objectPose(1,1)));
+		srv2.request.Pitch_angle_y = 3.14;
+		srv2.request.Roll_angle_x = 0;//orientation;
+		srv2.request.linear_velocity = 0.05;
+
+		ROS_INFO ( "Go to Grasp Pose ( %f , %f , %f )", behindPosition.x(), behindPosition.y(), behindPosition.z() );
+
+		if (setToolPosSrv.call(srv2)) {
+
+			ROS_INFO("calling set toll Pose");
+		} else {
+			ROS_ERROR("calling set toll Pose");
+			return 1;
+		}
+
 	}
 
 }
@@ -786,22 +961,37 @@ int main(int argc, char *argv[]) {
 
 	//global variables
 	ros::NodeHandle nh_;
-	ros::Publisher marker_pub = nh_.advertise<visualization_msgs::MarkerArray>("visualization_array", 100);
+	ros::Publisher marker_object_frame_pub = nh_.advertise<visualization_msgs::MarkerArray>("/rviz/object_frame", 100);
+	ros::Publisher marker_grasp_pub = nh_.advertise<visualization_msgs::MarkerArray>("/rviz/grasp", 100);
+
 	tf::TransformListener tf_;
 
 	setToolPosSrv = nh_.serviceClient<
 			INESC_Robotis_Driver::SetToolPose>("/GoToPose_service/setToolPose");
 
-	ros::ServiceClient client =
+	getToolPosSrv = nh_.serviceClient<
+			INESC_Robotis_Driver::GetToolPose>("/GoToPose_service/getToolPose");
+
+	client =
 			nh_.serviceClient<INESC_Robotis_Driver::HomeArm>(
 					"/GoToPose_service/homeArm");
-	INESC_Robotis_Driver::HomeArm srv;
+
+
 	if (client.call(srv)) {
 		ROS_INFO("calling home arm");
 	} else {
 		ROS_ERROR("home arm");
 		return 1;
 	}
+
+	INESC_Robotis_Driver::SetToolPose srv2;
+	srv2.request.pos_x = 0.20;
+	srv2.request.pos_y = 0.0;
+	srv2.request.pos_z = 0.28;
+	srv2.request.Yaw_angle_z = 3.14;
+	srv2.request.Pitch_angle_y = 1.57;
+	srv2.request.Roll_angle_x = 0; //orientation;
+	srv2.request.linear_velocity = 0.05;
 
 	std::string topic3 = nh_.resolveName("object_cloud");
 
@@ -813,8 +1003,9 @@ int main(int argc, char *argv[]) {
 
 	std::string topic = nh_.resolveName("/table_top_cloud");
 
-	nh_.setParam("/preprocessing/x_filter_min", 0.53);
-	nh_.setParam("/preprocessing/x_filter_max", 0.88);
+	nh_.setParam("/preprocessing/x_filter_min", 0.25);
+	nh_.setParam("/preprocessing/x_filter_max", 0.7);
+	nh_.setParam("/preprocessing/voxel_size", 0.001);
 
 	ros::ServiceServer service = nh_.advertiseService("graspNearestObject",graspNearestObject);
 
@@ -828,8 +1019,18 @@ int main(int argc, char *argv[]) {
 		if (!table_top_cloud_prt or table_top_cloud_prt->points.size() < 100) {
 			ROS_ERROR(
 					"unknown_object_grasping: no table top cloud prt has been received, check the preproicessing node");
-			client.call(srv);
-		} else {
+			//rosservice call /GoToPose_service/setToolPose "{pos_x: 0.35, pos_y: 0.0, pos_z: 0.30, Yaw_angle_z: 3.14, Pitch_angle_y: 1.57, Roll_angle_x: 0.0, linear_velocity: 0.05}"
+
+			if (setToolPosSrv.call(srv2)) {
+				ROS_INFO("calling set toll Pose");
+			} else {
+				ROS_ERROR("calling set toll Pose");
+				return 1;
+			}
+			//client.call(srv);
+		}
+		else
+		{
 			// Creating the KdTree object for the search method of the extraction
 			pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(
 					new pcl::search::KdTree<pcl::PointXYZ>);
@@ -866,7 +1067,11 @@ int main(int argc, char *argv[]) {
 						<< cloud_cluster->points.size() << " data points."
 						<< std::endl;
 
-				objects_clustered_points.push_back(cloud_cluster);
+				if(!checkTheArmCloud(*cloud_cluster , tf_)){
+					objects_clustered_points.push_back(cloud_cluster);
+				}
+
+
 
 			}
 
@@ -876,49 +1081,56 @@ int main(int argc, char *argv[]) {
 			pcl::PointCloud<pcl::PointXYZ>::Ptr object_clustered_point(
 					new pcl::PointCloud<pcl::PointXYZ>);
 
-			object_clustered_point = objects_clustered_points.at(
-					sortedIndex.front());
-
-			pub2.publish(object_clustered_point);
-
-
-
-			pcl::PointCloud<pcl::PointXYZ> object_frame_points;
-			ObjectCentericFrameRelatedToTable(*object_clustered_point, object_frame_points, objectPose);
-			visualization_msgs::MarkerArray axis = visualizeObjectAxis(objectPose);
-			marker_pub.publish(axis);
-			//atan2(objectPose.inverse());
-			//std::cout<< "yaw calc: "<< (objectPose.inverse()) << std::endl;
-			/*
-//			grasping the nearest
-			Eigen::Vector3d center;
-			CalcAverageDistToBase(*object_clustered_point, center);
-
-			center.x() = 0.5; //center.x() - 0.15;
-
-			std::cout << center;
-
-			objects_clustered_points.clear();
-
-			INESC_Robotis_Driver::SetToolPose srv2;
-
-			srv2.request.pos_x = center.x();
-			srv2.request.pos_y = center.y();
-			srv2.request.pos_z = center.z();
-			srv2.request.Yaw_angle_z = 3.14;
-			srv2.request.Pitch_angle_y = 1.57;
-			srv2.request.Roll_angle_x = 0;
-			srv2.request.linear_velocity = 0.1;
-
-			if (client1.call(srv2)) {
-				ROS_INFO("calling set toll Pose");
-			} else {
-				ROS_ERROR("calling set toll Pose");
-				return 1;
+			if(sortedIndex.size() == 0){
+				if (client.call(srv)) {
+					ROS_INFO("calling home arm");
+				} else {
+					ROS_ERROR("home arm");
+					return 1;
+				}
 			}
-			*/
+			else
+			{
+
+				object_clustered_point = objects_clustered_points.at(
+						sortedIndex.front());
+
+				pub2.publish(object_clustered_point);
+
+				// Object Pose detection
+				pcl::PointCloud<pcl::PointXYZ> object_frame_points;
+				ObjectCentericFrameRelatedToTable(*object_clustered_point, object_frame_points, objectPose);
+				visualization_msgs::MarkerArray axis = visualizeObjectAxis(objectPose);
+				marker_object_frame_pub.publish(axis);
+
+				// Grasp Pose detection
+				graspStrategyAndPointDetection(object_frame_points);
+
+				Eigen::Vector3d matchedPoint((grasp_pose.leftPoint.x+grasp_pose.rightPoint.x)/2,
+						(grasp_pose.leftPoint.y+grasp_pose.rightPoint.y)/2,
+						(grasp_pose.leftPoint.z+grasp_pose.rightPoint.z)/2);
 
 
+
+				std::cout << "matchedPoint ="<< matchedPoint<<std::endl;
+
+
+
+				Eigen::Vector3d graspPosition = objectPose
+													* matchedPoint;
+
+				std::cout << "graspPosition ="<< graspPosition <<std::endl;
+				//Eigen::vector3f rpy = objectPose.linear().;
+				double yaw = -1*atan2(objectPose(0,1), objectPose(1,1));
+				std::cout << "graspRotation =" << yaw<<std::endl;
+
+				double distBehind = 0.04;
+				Eigen::Vector3d behindVec;
+				behindVec<< -distBehind , 0, 0;
+				Eigen::Vector3d behindPosition = graspPosition + (objectPose.linear()*behindVec);
+
+				std::cout << "graspBehindPosition ="<< behindPosition <<std::endl;
+				}
 
 		}
 		ros::spinOnce();

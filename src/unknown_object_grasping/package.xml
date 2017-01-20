@@ -30,7 +30,8 @@
   <build_depend>interactive_markers</build_depend>
   <build_depend>message_generation</build_depend>
   <build_depend>INESC_Robotis_Driver</build_depend>
-
+  <build_depend>tf_conversions</build_depend>
+  
   <!-- Use buildtool_depend for build tool packages: -->
   <!--   <buildtool_depend>catkin</buildtool_depend> -->
   <!-- Use run_depend for packages you need at runtime: -->
@@ -44,6 +45,7 @@
   <run_depend>interactive_markers</run_depend>
   <run_depend>message_runtime</run_depend>
   <run_depend>INESC_Robotis_Driver</run_depend>
+  <run_depend>tf_conversions</run_depend>
 
   <!-- Use test_depend for packages you need only for testing: -->
   <!--   <test_depend>gtest</test_depend> -->
