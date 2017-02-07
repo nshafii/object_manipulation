@@ -26,8 +26,14 @@
 
 //Arm driver includes
 #include "INESC_Robotis_Driver/SetToolPose.h"
+#include "INESC_Robotis_Driver/SetToolPosition.h"
 #include "INESC_Robotis_Driver/GetToolPose.h"
 #include "INESC_Robotis_Driver/HomeArm.h"
+
+//Griper driver includes
+#include "inesc_3_finger_gripper_driver/Stop.h"
+#include "inesc_3_finger_gripper_driver/Open.h"
+#include "inesc_3_finger_gripper_driver/Close.h"
 
 // visualization
 #include <visualization_msgs/Marker.h>
@@ -40,188 +46,216 @@ typedef struct {
 	bool sideStrategy, topStrategy, flatStrategy;
 } grasp_strategy;
 
-typedef struct{
+typedef struct {
 	geometry_msgs::Point leftPoint;
 	geometry_msgs::Point rightPoint;
 } grasp_width;
 
 ros::ServiceClient setToolPosSrv;
+ros::ServiceClient setToolPositionSrv;
 ros::ServiceClient getToolPosSrv;
-Eigen::Vector3d graspPose;
+Eigen::Vector3d targetArmPosition;
 Eigen::Affine3d objectPose;
 double orientation;
 
-ros::ServiceClient client;
+ros::ServiceClient homePoseSrv;
 
 INESC_Robotis_Driver::HomeArm srv;
+inesc_3_finger_gripper_driver::Close closeGripperSrv;
+inesc_3_finger_gripper_driver::Open openGripperSrv;
+INESC_Robotis_Driver::GetToolPose getToolPose;
+
+double graspBeginTime;
+bool grasp_execution = false;
+Eigen::Vector3d graspBehindPosition;
+Eigen::Vector3d graspPoint;
+Eigen::Vector3d graspOrientation;
+
+bool preGraspState =true;
+bool graspState =false;
+bool closingGripperState =false;
+bool pickUpState =false;
+bool moveState =false;
+bool placeState =false;
+bool openGirperState =false;
+bool HomeState =false;
 
 
 //bool sideStrategy, topStrategy, flatStrategy;
-grasp_strategy grasp = {false, false , false};
+grasp_strategy grasp = { false, false, false };
 grasp_width grasp_pose;
 
-Eigen::Vector3d vectorTFToEigen(tf::Vector3 pos_tf){
+Eigen::Vector3d vectorTFToEigen(tf::Vector3 pos_tf) {
 	Eigen::Vector3d pos_eigen;
-	pos_eigen<< pos_tf.x(),pos_tf.y(),pos_tf.z();
+	pos_eigen << pos_tf.x(), pos_tf.y(), pos_tf.z();
 	return pos_eigen;
 }
 
 void ObjectCentericFrameRelatedToTable(
 		const pcl::PointCloud<pcl::PointXYZ>& target_pc,
 		pcl::PointCloud<pcl::PointXYZ>& transformed_cloud,
-		Eigen::Affine3d& pose)
-		{
+		Eigen::Affine3d& pose) {
 
-      // calculate the dimension of bounding box in Arm frame
+	// calculate the dimension of bounding box in Arm frame
 
-      double minX, minY, minZ;
+	double minX, minY, minZ;
 
-      double maxX, maxY, maxZ;
+	double maxX, maxY, maxZ;
 
-      minX= minY= minZ=100000;
+	minX = minY = minZ = 100000;
 
-      maxX= maxY= maxZ=-100000;
+	maxX = maxY = maxZ = -100000;
 
-      pcl::PointCloud<pcl::PointXYZ>::Ptr model(new pcl::PointCloud<pcl::PointXYZ>);
+	pcl::PointCloud<pcl::PointXYZ>::Ptr model(
+			new pcl::PointCloud<pcl::PointXYZ>);
 
-      pcl::PointCloud<pcl::PointXYZ>::Ptr modelTemp(new pcl::PointCloud<pcl::PointXYZ>);
+	pcl::PointCloud<pcl::PointXYZ>::Ptr modelTemp(
+			new pcl::PointCloud<pcl::PointXYZ>);
 
-      pcl::PointCloud<pcl::PointXYZ>::Ptr transforemedCloudTemp(new pcl::PointCloud<pcl::PointXYZ>);
+	pcl::PointCloud<pcl::PointXYZ>::Ptr transforemedCloudTemp(
+			new pcl::PointCloud<pcl::PointXYZ>);
 
-      for (unsigned int i=0; i < target_pc.points.size(); i++)
+	for (unsigned int i = 0; i < target_pc.points.size(); i++)
 
-      {
+	{
 
-              double X = target_pc.points.at(i).x;
+		double X = target_pc.points.at(i).x;
 
-              double Y = target_pc.points.at(i).y;
+		double Y = target_pc.points.at(i).y;
 
-              double Z = target_pc.points.at(i).z;
+		double Z = target_pc.points.at(i).z;
 
-              Eigen::Vector3d PointInArmFrameWithOutTranslition;
-              PointInArmFrameWithOutTranslition << X, Y, Z;
+		Eigen::Vector3d PointInArmFrameWithOutTranslition;
+		PointInArmFrameWithOutTranslition << X, Y, Z;
 
-              pcl::PointXYZ pointInArmFrame;
+		pcl::PointXYZ pointInArmFrame;
 
-              pointInArmFrame.x = PointInArmFrameWithOutTranslition.x();
+		pointInArmFrame.x = PointInArmFrameWithOutTranslition.x();
 
-              pointInArmFrame.y = PointInArmFrameWithOutTranslition.y();
+		pointInArmFrame.y = PointInArmFrameWithOutTranslition.y();
 
-              pointInArmFrame.z = PointInArmFrameWithOutTranslition.z();
+		pointInArmFrame.z = PointInArmFrameWithOutTranslition.z();
 
-              model->points.push_back(pointInArmFrame);
+		model->points.push_back(pointInArmFrame);
 
-              if(pointInArmFrame.x < minX) minX = pointInArmFrame.x;
+		if (pointInArmFrame.x < minX)
+			minX = pointInArmFrame.x;
 
-              if(pointInArmFrame.y < minY) minY = pointInArmFrame.y;
+		if (pointInArmFrame.y < minY)
+			minY = pointInArmFrame.y;
 
-              if(pointInArmFrame.z < minZ) minZ = pointInArmFrame.z;
+		if (pointInArmFrame.z < minZ)
+			minZ = pointInArmFrame.z;
 
-              if(pointInArmFrame.x > maxX) maxX = pointInArmFrame.x;
+		if (pointInArmFrame.x > maxX)
+			maxX = pointInArmFrame.x;
 
-              if(pointInArmFrame.y > maxY) maxY = pointInArmFrame.y;
+		if (pointInArmFrame.y > maxY)
+			maxY = pointInArmFrame.y;
 
-              if(pointInArmFrame.z > maxZ) maxZ = pointInArmFrame.z;
+		if (pointInArmFrame.z > maxZ)
+			maxZ = pointInArmFrame.z;
 
-      }
+	}
 
-      /// transformation------------------------
+	/// transformation------------------------
 
-      /// computePose
+	/// computePose
 
-      Eigen::Vector3d centroid;
+	Eigen::Vector3d centroid;
 
-      centroid << (minX+maxX) / 2.0, (minY+maxY) / 2.0, (minZ+maxZ) / 2.0;
+	centroid << (minX + maxX) / 2.0, (minY + maxY) / 2.0, (minZ + maxZ) / 2.0;
 
-      pcl::copyPointCloud(*model, *modelTemp);
+	pcl::copyPointCloud(*model, *modelTemp);
 
-      /// project on ground
+	/// project on ground
 
-      for(int i = 0; i < model->size(); ++i)
+	for (int i = 0; i < model->size(); ++i)
 
-              model->points[i].z = 0;
+		model->points[i].z = 0;
 
-      /// calc the PCA
+	/// calc the PCA
 
-      Eigen::Vector3d eval;
+	Eigen::Vector3d eval;
 
-      Eigen::Matrix3f evec;
+	Eigen::Matrix3f evec;
 
-      pcl::PCA<pcl::PointXYZ> pca2D;
+	pcl::PCA<pcl::PointXYZ> pca2D;
 
-      pca2D.setInputCloud(model);
+	pca2D.setInputCloud(model);
 
-      evec = pca2D.getEigenVectors();
+	evec = pca2D.getEigenVectors();
 
-      /// calc the Orientation
+	/// calc the Orientation
 
-      orientation = std::atan2(evec(1,0), evec(0,0) );
+	orientation = std::atan2(evec(1, 0), evec(0, 0));
 
-      ROS_INFO("direct yaw %f", orientation * 180 / M_PI);
+	ROS_INFO("direct yaw %f", orientation * 180 / M_PI);
 
-      // put the cloud to the calclated object frame
+	// put the cloud to the calclated object frame
 
-      pose = Eigen::Translation3d(centroid) * Eigen::AngleAxisd(orientation, Eigen::Vector3d::UnitZ());
+	pose = Eigen::Translation3d(centroid)
+			* Eigen::AngleAxisd(orientation, Eigen::Vector3d::UnitZ());
 
-      pcl::transformPointCloud(*modelTemp, *transforemedCloudTemp, pose.inverse().cast<float>());
+	pcl::transformPointCloud(*modelTemp, *transforemedCloudTemp,
+			pose.inverse().cast<float>());
 
-      // check the sign ambiguty
+	// check the sign ambiguty
 
-      float countMinus = 0;
+	float countMinus = 0;
 
-      float countPositive = 0;
+	float countPositive = 0;
 
-      for (unsigned int i=0; i < transforemedCloudTemp->points.size(); i++)
+	for (unsigned int i = 0; i < transforemedCloudTemp->points.size(); i++)
 
-      {
+	{
 
-              if(transforemedCloudTemp->points[i].x <= 0 )
+		if (transforemedCloudTemp->points[i].x <= 0)
 
-                      countMinus = countMinus + transforemedCloudTemp->points[i].x;
+			countMinus = countMinus + transforemedCloudTemp->points[i].x;
 
-              else
+		else
 
-                      countPositive = countPositive + transforemedCloudTemp->points[i].x;
+			countPositive = countPositive + transforemedCloudTemp->points[i].x;
 
-      }
+	}
 
-      //if(countMinus < countPositive){
-      if(orientation < M_PI/2 and orientation > -M_PI/2){
-              pcl::copyPointCloud(*transforemedCloudTemp, transformed_cloud);
+	//if(countMinus < countPositive){
+	if (orientation < M_PI / 2 and orientation > -M_PI / 2) {
+		pcl::copyPointCloud(*transforemedCloudTemp, transformed_cloud);
 
-      }
+	}
 
-      else
+	else
 
-      {
+	{
 
-              ROS_INFO("sign ambiguity has been solved");
+		ROS_INFO("sign ambiguity has been solved");
 
-              Eigen::Affine3d poseAmb = Eigen::Translation3d(centroid) * Eigen::AngleAxisd(M_PI, Eigen::Vector3d::UnitZ());
+//		Eigen::Affine3d poseAmb = Eigen::Translation3d(centroid)
+//				* Eigen::AngleAxisd(M_PI, Eigen::Vector3d::UnitZ());
 
-              pcl::transformPointCloud(*transforemedCloudTemp, transformed_cloud, poseAmb.inverse());
+//		pcl::transformPointCloud(*modelTemp, transformed_cloud,
+//				poseAmb.inverse());
 
-              pose = Eigen::Translation3d(centroid) * Eigen::AngleAxisd(orientation + M_PI, Eigen::Vector3d::UnitZ()) ;
-              // here do nothing
-              //pcl::copyPointCloud(*transforemedCloudTemp, transformed_cloud);
+		pose = Eigen::Translation3d(centroid)
+				* Eigen::AngleAxisd(orientation + M_PI,
+						Eigen::Vector3d::UnitZ());
 
-      }
+		pcl::transformPointCloud(*modelTemp, transformed_cloud,
+					pose.inverse().cast<float>());
+
+	}
 
 }
 
 void graspStrategyAndPointDetection(
-		const pcl::PointCloud<pcl::PointXYZ>& target_pc)
-		{
+		const pcl::PointCloud<pcl::PointXYZ>& target_pc) {
 	double LENGTH_PROPER = 0.05; //this is under discussion and unknown
 
 	int orientationCorrection = 1; // this is for sign anbiguty
 
-
-
 	std::vector<geometry_msgs::Point> objectPointCloud;
-
-
-
 
 	// calculate the dimension of bounding box
 
@@ -235,8 +269,7 @@ void graspStrategyAndPointDetection(
 
 	objectPointCloud.clear();
 
-	for (unsigned int i = 0; i < target_pc.points.size(); i++)
-	{
+	for (unsigned int i = 0; i < target_pc.points.size(); i++) {
 
 		double X = target_pc.points.at(i).x;
 
@@ -288,13 +321,15 @@ void graspStrategyAndPointDetection(
 
 	ROS_INFO("zDimention: %f", zDimention);
 
+
 	int devisionSize = 5;
 
 	// Analyze the face of the object related to view Point grasp horizontally
 
-	if (zDimention + 0.03 > yDimention && zDimention + 0.04 > xDimention && zDimention > 0.02)
+	if (zDimention + 0.03 > yDimention && zDimention + 0.04 > xDimention
+			&& zDimention > 0.035)
 
-	{
+			{
 
 		ROS_INFO("Z is the principle axis");
 
@@ -381,6 +416,7 @@ void graspStrategyAndPointDetection(
 			ROS_INFO("minXDimention, Sector founds [%i]: %f ", foundIter,
 					minXDimention);
 
+
 			ROS_INFO("size Point Cloud= %i .size transferred= %d",
 					target_pc.points.size(), objectPointCloud.size());
 
@@ -394,9 +430,9 @@ void graspStrategyAndPointDetection(
 
 			grasp_pose.rightPoint.y = maxY;
 
-			grasp_pose.leftPoint.z = (minZ + maxZ)/2;
+			grasp_pose.leftPoint.z = (minZ + maxZ) / 2;
 
-			grasp_pose.rightPoint.z = (minZ + maxZ)/2;
+			grasp_pose.rightPoint.z = (minZ + maxZ) / 2;
 
 //			grasp_pose.leftPoint.z = ((foundIter + 0.5) * zInterval) + minZ;
 //
@@ -419,9 +455,7 @@ void graspStrategyAndPointDetection(
 //
 //	else if (xDimention > (zDimention + 0.02)
 //			&& yDimention > (zDimention + 0.02))
-	else if (xDimention > (zDimention + 0.02)
-				&& yDimention > 0.14)
-			{
+	else if (xDimention > (zDimention + 0.02) && yDimention > 0.14) {
 
 		ROS_INFO(" flat object , x and y are the principale axis");
 
@@ -514,9 +548,9 @@ void graspStrategyAndPointDetection(
 
 		grasp_pose.rightPoint.x = minX;
 
-		grasp_pose.leftPoint.y = (maxY + minY)/2;
+		grasp_pose.leftPoint.y = (maxY + minY) / 2;
 
-		grasp_pose.rightPoint.y = (maxY + minY)/2;
+		grasp_pose.rightPoint.y = (maxY + minY) / 2;
 
 		grasp_pose.leftPoint.z = minZ;
 
@@ -626,9 +660,9 @@ void graspStrategyAndPointDetection(
 				target_pc.points.size(), objectPointCloud.size());
 
 		// ToDo Should be fixed
-		grasp_pose.leftPoint.x = (maxX + minX)/2;
+		grasp_pose.leftPoint.x = (maxX + minX) / 2;
 
-		grasp_pose.rightPoint.x = (maxX + minX)/2;
+		grasp_pose.rightPoint.x = (maxX + minX) / 2;
 
 		grasp_pose.leftPoint.y = minY;
 
@@ -677,58 +711,54 @@ void CalcAverageDistToBase(const pcl::PointCloud<pcl::PointXYZ>& cloud,
 
 }
 
-
-bool checkTheArmCloud(pcl::PointCloud<pcl::PointXYZ>& cloud_cluster, tf::TransformListener& tf_linsener){
-	tf_linsener.waitForTransform("world", "end_effector",
-						ros::Time(0), ros::Duration(4));
+bool checkTheArmCloud(pcl::PointCloud<pcl::PointXYZ>& cloud_cluster,
+		tf::TransformListener& tf_linsener) {
+	tf_linsener.waitForTransform("world", "end_effector", ros::Time(0),
+			ros::Duration(4));
 	tf::StampedTransform transform_world_end;
 
-	tf_linsener.lookupTransform("world",
-						"end_effector", ros::Time(0),
-						transform_world_end);
-	Eigen::Vector3d end_eff_Pos = vectorTFToEigen(transform_world_end.getOrigin());
+	tf_linsener.lookupTransform("world", "end_effector", ros::Time(0),
+			transform_world_end);
+	Eigen::Vector3d end_eff_Pos = vectorTFToEigen(
+			transform_world_end.getOrigin());
 
 	tf::StampedTransform transform_world_Link5;
-	tf_linsener.lookupTransform("world",
-						"link5", ros::Time(0),
-						transform_world_Link5);
-	Eigen::Vector3d link5_Pos = vectorTFToEigen(transform_world_Link5.getOrigin());
-
-	std::cout<<"world-Link5: "<< transform_world_Link5.getOrigin().x()<<std::endl;
+	tf_linsener.lookupTransform("world", "link5", ros::Time(0),
+			transform_world_Link5);
+	Eigen::Vector3d link5_Pos = vectorTFToEigen(
+			transform_world_Link5.getOrigin());
 
 
 	tf::StampedTransform transform_world_Link4;
-	tf_linsener.lookupTransform("world",
-						"link4", ros::Time(0),
-						transform_world_Link4);
+	tf_linsener.lookupTransform("world", "link4", ros::Time(0),
+			transform_world_Link4);
 
-	Eigen::Vector3d link4_Pos = vectorTFToEigen(transform_world_Link4.getOrigin());
-
+	Eigen::Vector3d link4_Pos = vectorTFToEigen(
+			transform_world_Link4.getOrigin());
 
 	Eigen::Vector3d cloud_CoM;
 	CalcAverageDistToBase(cloud_cluster, cloud_CoM);
 
-	if((cloud_CoM-link5_Pos).norm() < (end_eff_Pos-link5_Pos).norm()
-			and
-			(cloud_CoM-end_eff_Pos).norm()<(end_eff_Pos-link5_Pos).norm()){
+	double noiseMargin = 0.02;
+	if ((cloud_CoM - link5_Pos).norm() < ((end_eff_Pos - link5_Pos).norm()+noiseMargin)
+			and (cloud_CoM - end_eff_Pos).norm()
+					< ((end_eff_Pos - link5_Pos).norm()+noiseMargin)) {
 		ROS_INFO("segmenting out the arm cloud of last link");
 		return true;
 	}
 
-	double gripperDist = 0.06;
-	if((cloud_CoM-end_eff_Pos).norm()<gripperDist ){
+	double gripperDist = 0.07+0.17;
+	if ((cloud_CoM - end_eff_Pos).norm() < gripperDist) {
 		ROS_INFO("segmenting out the griper cloud");
 		return true;
 	}
 
-
-	if((cloud_CoM-link4_Pos).norm() < (link4_Pos-link5_Pos).norm()
-			and
-			(cloud_CoM-link5_Pos).norm()<(link4_Pos-link5_Pos).norm()){
+	if ((cloud_CoM - link4_Pos).norm() < ((link4_Pos - link5_Pos).norm()+noiseMargin)
+			and (cloud_CoM - link5_Pos).norm()
+					< ((link4_Pos - link5_Pos).norm()+noiseMargin)) {
 		ROS_INFO("segmenting out the arm cloud of link");
 		return true;
 	}
-
 
 	return false;
 }
@@ -771,7 +801,7 @@ void SortDistToBase(
 
 }
 
-geometry_msgs::Point eigenVectorToPointMsg(Eigen::Vector3d vec){
+geometry_msgs::Point eigenVectorToPointMsg(Eigen::Vector3d vec) {
 	geometry_msgs::Point out;
 	out.x = vec.x();
 	out.y = vec.y();
@@ -779,7 +809,8 @@ geometry_msgs::Point eigenVectorToPointMsg(Eigen::Vector3d vec){
 	return out;
 }
 
-visualization_msgs::MarkerArray visualizeObjectAxis(Eigen::Affine3d objectAffine){
+visualization_msgs::MarkerArray visualizeObjectAxis(
+		Eigen::Affine3d objectAffine) {
 
 	Eigen::Vector3d x1, x2, y1, y2, z1, z2;
 	visualization_msgs::MarkerArray array;
@@ -819,19 +850,16 @@ visualization_msgs::MarkerArray visualizeObjectAxis(Eigen::Affine3d objectAffine
 	line_z.color.b = 1.0;
 	line_z.color.a = 1.0;
 
-
-
 	double length = 0.1;
-	x1 << length,0,0;
-	y1 << 0,length,0;
-	z1 << 0,0,length;
+	x1 << length, 0, 0;
+	y1 << 0, length, 0;
+	z1 << 0, 0, length;
 
 	Eigen::Vector3d centroid = objectAffine.translation();
 
 	x2 = objectAffine.linear() * x1 + centroid;
 	y2 = objectAffine.linear() * y1 + centroid;
 	z2 = objectAffine.linear() * z1 + centroid;
-
 
 	line_x.points.push_back(eigenVectorToPointMsg(centroid));
 
@@ -853,144 +881,184 @@ visualization_msgs::MarkerArray visualizeObjectAxis(Eigen::Affine3d objectAffine
 
 }
 
-bool graspNearestObject(unknown_object_grasping::GraspingNearestObject::Request &req,
-unknown_object_grasping::GraspingNearestObject::Response &res)
-{
+bool graspNearestObject(
+		unknown_object_grasping::GraspingNearestObject::Request &req,
+		unknown_object_grasping::GraspingNearestObject::Response &res) {
 
 
-	//Eigen::Vector3d objectPosition = objectPose.translation();
-//	if (client.call(srv)) {
-//		ROS_INFO("calling home pose");
-//	} else {
-//		ROS_ERROR("calling homePose");
-//		return 1;
-//	}
+	grasp_execution = true;
+	preGraspState =true;
+	graspState =false;
+	closingGripperState =false;
+	pickUpState =false;
+	moveState =false;
+	placeState =false;
+	openGirperState =false;
+	HomeState =false;
 
-//	INESC_Robotis_Driver::SetToolPose initialPos;
-//	initialPos.request.pos_x = 0.30;
-//	initialPos.request.pos_y = 0.0;
-//	initialPos.request.pos_z = 0.28;
-//	initialPos.request.Yaw_angle_z = 3.14 ;
-//	initialPos.request.Pitch_angle_y = 1.54;
-//	initialPos.request.Roll_angle_x = 0;//orientation;
-//	initialPos.request.linear_velocity = 0.05;
-//
-//	if (setToolPosSrv.call(initialPos)) {
-//
-//		ROS_INFO("calling set toll Pose");
-//	} else {
-//		ROS_ERROR("calling set toll Pose");
-//		return 1;
-//	}
+	graspBeginTime = ros::Time::now().toSec();
 
-
-	Eigen::Vector3d matchedPoint((grasp_pose.leftPoint.x+grasp_pose.rightPoint.x)/2,
-			(grasp_pose.leftPoint.y+grasp_pose.rightPoint.y)/2,
-			(grasp_pose.leftPoint.z+grasp_pose.rightPoint.z)/2);
+	Eigen::Vector3d matchedPoint(
+			(grasp_pose.leftPoint.x + grasp_pose.rightPoint.x) / 2,
+			(grasp_pose.leftPoint.y + grasp_pose.rightPoint.y) / 2,
+			(grasp_pose.leftPoint.z + grasp_pose.rightPoint.z) / 2);
 
 	Eigen::Vector3d graspPosition = objectPose * matchedPoint;
 
-	if(grasp.sideStrategy){
+	if (grasp.sideStrategy) {
 		ROS_INFO("Executing Side Strategy");
-		double distBehind = 0.07;
+		double distBehind = 0.16;
 		Eigen::Vector3d behindVec;
-		behindVec<< -distBehind , 0, 0;
-		Eigen::Vector3d behindPosition = graspPosition + (objectPose.linear()*behindVec);
+		behindVec << -distBehind, 0, 0;
+		graspBehindPosition = graspPosition + (objectPose.linear() * behindVec);
 
-		INESC_Robotis_Driver::SetToolPose srv2;
+		behindVec << -0.085, 0, 0;
+		graspPoint = graspPosition + (objectPose.linear() * behindVec);
 
-		srv2.request.pos_x = behindPosition.x();
-		srv2.request.pos_y = behindPosition.y();
-		srv2.request.pos_z = behindPosition.z();
-		srv2.request.Yaw_angle_z = 3.14;
-		srv2.request.Pitch_angle_y = 1.57;
+		double yawOrientation = -1 * atan2(objectPose(0, 1), objectPose(1, 1));
 
-		double yawOrientation = -1* atan2(objectPose(0,1), objectPose(1,1));
+		if (yawOrientation > 0.6)
+			yawOrientation = 0.6;
 
-		if(yawOrientation > 0.6) yawOrientation = 0.6;
-//
-		if(yawOrientation < -0.6) yawOrientation = -0.6;
+		if (yawOrientation < -0.6)
+			yawOrientation = -0.6;
 
-		srv2.request.Roll_angle_x = yawOrientation;//orientation;
-		srv2.request.linear_velocity = 0.05;
+		graspOrientation << 3.14, 1.57, yawOrientation;
 
-		ROS_INFO ( "Go to Grasp Pose ( %f , %f , %f )", behindPosition.x(), behindPosition.y(), behindPosition.z() );
-
-		if (setToolPosSrv.call(srv2)) {
-
-			ROS_INFO("calling set toll Pose");
-		} else {
-			ROS_ERROR("calling set toll Pose");
-			return 1;
-		}
 	}
 
-	if(	grasp.topStrategy){
+	if (grasp.topStrategy) {
 		ROS_INFO("Executing Top Strategy");
-		double distBehind = 0.07;
+		double distBehind = 0.14;
 		Eigen::Vector3d behindVec;
-		behindVec<< 0 , 0, distBehind;
-		Eigen::Vector3d behindPosition = graspPosition + behindVec;
+		behindVec << 0, 0, distBehind;
+		graspBehindPosition = graspPosition + behindVec;
 
-		INESC_Robotis_Driver::SetToolPose srv2;
+		behindVec << 0, 0, 0.1;
+		graspPoint = graspPosition + behindVec;
 
-		srv2.request.pos_x = behindPosition.x();
-		srv2.request.pos_y = behindPosition.y();
-		srv2.request.pos_z = behindPosition.z();
-		srv2.request.Yaw_angle_z = 3.14 - (-1*atan2(objectPose(0,1), objectPose(1,1)));
-		srv2.request.Pitch_angle_y = 3.14;
-		srv2.request.Roll_angle_x = 0;//orientation;
-		srv2.request.linear_velocity = 0.05;
-
-		ROS_INFO ( "Go to Grasp Pose ( %f , %f , %f )", behindPosition.x(), behindPosition.y(), behindPosition.z() );
-
-		if (setToolPosSrv.call(srv2)) {
-
-			ROS_INFO("calling set toll Pose");
-		} else {
-			ROS_ERROR("calling set toll Pose");
-			return 1;
-		}
-
+		graspOrientation
+				<< (3.14 - (-1 * atan2(objectPose(0, 1), objectPose(1, 1)))), 3.14, 0;
 	}
 
 }
+
+void moveArmToPose(Eigen::Vector3d position, Eigen::Vector3d orientation){
+
+	INESC_Robotis_Driver::SetToolPose moveToPose;
+
+	moveToPose.request.pos_x = position.x();
+	moveToPose.request.pos_y = position.y();
+
+	if(fabs(orientation.y()-3.14) < 0.1 && position.z() < 0.1){
+		position.z()= 0.1;
+		ROS_ERROR("In top strategy, colliding with the table");
+	}else if (fabs(orientation.y()-1.57)< 0.1 && position.z() < 0){
+		position.z()= 0;
+		ROS_ERROR("In side strategy, colliding with the table");
+	}
+	moveToPose.request.pos_z = position.z();
+
+	targetArmPosition = position;
+	moveToPose.request.Yaw_angle_z = orientation.x();
+	moveToPose.request.Pitch_angle_y = orientation.y();
+	moveToPose.request.Roll_angle_x = orientation.z();
+	moveToPose.request.linear_velocity = 0.05;
+
+	if (setToolPosSrv.call(moveToPose)) {
+		ROS_INFO("calling set tool Pose moveToPose, for the Position =(%f, %f, %f) and orientation= (%f, %f, %f)", position.x()
+				, position.y(), position.z(), orientation.x(), orientation.y(), orientation.z());
+	} else {
+		ROS_ERROR(" Error moveToPose is not reachable for the Position =(%f, %f, %f) and orientation= (%f, %f, %f)", position.x()
+				, position.y(), position.z(), orientation.x(), orientation.y(), orientation.z());
+	}
+
+}
+
+void moveArmToPosition(Eigen::Vector3d position){
+
+	INESC_Robotis_Driver::SetToolPosition moveToPose;
+
+	moveToPose.request.pos_x = position.x();
+	moveToPose.request.pos_y = position.y();
+	moveToPose.request.pos_z = position.z();
+
+//	if(fabs(orientation.y()-3.14) < 0.1 && position.z() < 0.1){
+//		moveToPose.request.pos_z = 0.1;
+//		ROS_ERROR("In top strategy, colliding with the table");
+//	}else if (fabs(orientation.y()-1.57)< 0.1 && position.z() < 0){
+//		moveToPose.request.pos_z = 0;
+//		ROS_ERROR("In side strategy, colliding with the table");
+//	}else{
+//		moveToPose.request.pos_z = position.z();
+//	}
+	targetArmPosition = position;
+	moveToPose.request.linear_velocity = 0.05;
+
+	if (setToolPositionSrv.call(moveToPose)) {
+		ROS_INFO("calling set tool Pose moveToPose, for the Position =(%f, %f, %f)", position.x()
+				, position.y(), position.z());
+	} else {
+		ROS_ERROR(" Error moveToPose is not reachable for the Position =(%f, %f, %f)", position.x()
+				, position.y(), position.z());
+	}
+
+}
+
 
 int main(int argc, char *argv[]) {
 	ros::init(argc, argv, "unknown_object_grasping");
 
 	//global variables
 	ros::NodeHandle nh_;
-	ros::Publisher marker_object_frame_pub = nh_.advertise<visualization_msgs::MarkerArray>("/rviz/object_frame", 100);
-	ros::Publisher marker_grasp_pub = nh_.advertise<visualization_msgs::MarkerArray>("/rviz/grasp", 100);
+	ros::Publisher marker_object_frame_pub = nh_.advertise<
+			visualization_msgs::MarkerArray>("/rviz/object_frame", 100);
+	ros::Publisher marker_grasp_pub = nh_.advertise<
+			visualization_msgs::MarkerArray>("/rviz/grasp", 100);
 
 	tf::TransformListener tf_;
 
-	setToolPosSrv = nh_.serviceClient<
-			INESC_Robotis_Driver::SetToolPose>("/GoToPose_service/setToolPose");
+	setToolPosSrv = nh_.serviceClient<INESC_Robotis_Driver::SetToolPose>(
+			"/GoToPose_service/setToolPose");
 
-	getToolPosSrv = nh_.serviceClient<
-			INESC_Robotis_Driver::GetToolPose>("/GoToPose_service/getToolPose");
+	setToolPositionSrv = nh_.serviceClient<INESC_Robotis_Driver::SetToolPosition>(
+				"/GoToPose_service/setToolPosition");
 
-	client =
-			nh_.serviceClient<INESC_Robotis_Driver::HomeArm>(
-					"/GoToPose_service/homeArm");
+	getToolPosSrv = nh_.serviceClient<INESC_Robotis_Driver::GetToolPose>(
+			"/GoToPose_service/getToolPos");
 
+	homePoseSrv = nh_.serviceClient<INESC_Robotis_Driver::HomeArm>(
+			"/GoToPose_service/homeArm");
 
-	if (client.call(srv)) {
+	ros::ServiceClient gripperCloseSrv = nh_.serviceClient<inesc_3_finger_gripper_driver::Close>(
+				"/Gripper_driver/closeGripper");
+
+	ros::ServiceClient gripperOpenSrv = nh_.serviceClient<inesc_3_finger_gripper_driver::Open>(
+					"/Gripper_driver/openGripper");
+
+	if (homePoseSrv.call(srv)) {
 		ROS_INFO("calling home arm");
 	} else {
 		ROS_ERROR("home arm");
 		return 1;
 	}
 
+	if (gripperOpenSrv.call(openGripperSrv)) {
+		ROS_INFO("opening the griper");
+	} else {
+		ROS_ERROR("opening the griper Erro");
+		return 1;
+	}
+
+	ros::Duration(3).sleep();
+
 	INESC_Robotis_Driver::SetToolPose srv2;
-	srv2.request.pos_x = 0.20;
+	srv2.request.pos_x = 0.2;
 	srv2.request.pos_y = 0.0;
-	srv2.request.pos_z = 0.28;
+	srv2.request.pos_z = 0.3;
 	srv2.request.Yaw_angle_z = 3.14;
 	srv2.request.Pitch_angle_y = 1.57;
-	srv2.request.Roll_angle_x = 0; //orientation;
+	srv2.request.Roll_angle_x = 0;
 	srv2.request.linear_velocity = 0.05;
 
 	std::string topic3 = nh_.resolveName("object_cloud");
@@ -1004,14 +1072,37 @@ int main(int argc, char *argv[]) {
 	std::string topic = nh_.resolveName("/table_top_cloud");
 
 	nh_.setParam("/preprocessing/x_filter_min", 0.25);
+	nh_.setParam("/preprocessing/z_filter_max", 0.2);
 	nh_.setParam("/preprocessing/x_filter_max", 0.7);
 	nh_.setParam("/preprocessing/voxel_size", 0.001);
 
-	ros::ServiceServer service = nh_.advertiseService("graspNearestObject",graspNearestObject);
+	ros::ServiceServer service = nh_.advertiseService("graspNearestObject",
+			graspNearestObject);
 
 	while (ros::ok()) {
 
-		ros::Time start_time = ros::Time::now();
+
+		double current_time = ros::Time::now().toSec();
+
+		if (getToolPosSrv.call(getToolPose))
+						{
+							ROS_INFO("calling get toll Pose");
+						}
+						else {
+							ROS_ERROR("calling get toll Pose");
+							//return 1;
+						}
+
+		Eigen::Vector3d currentArmPosition;
+		currentArmPosition << getToolPose.response.pos_x, getToolPose.response.pos_y, getToolPose.response.pos_z;
+
+		Eigen::Vector3d currentArmOrientation;
+		currentArmOrientation << getToolPose.response.zyx_angle_x, getToolPose.response.zyx_angle_y, getToolPose.response.zyx_angle_z;
+
+		std::cout<< "currentArmPosition:" << currentArmPosition << std::endl;
+		std::cout<< "currentArmOrientation:" << currentArmOrientation << std::endl;
+
+
 		pcl::PointCloud<pcl::PointXYZ>::ConstPtr table_top_cloud_prt =
 				ros::topic::waitForMessage<pcl::PointCloud<pcl::PointXYZ> >(
 						topic, nh_, ros::Duration(10.0));
@@ -1019,18 +1110,15 @@ int main(int argc, char *argv[]) {
 		if (!table_top_cloud_prt or table_top_cloud_prt->points.size() < 100) {
 			ROS_ERROR(
 					"unknown_object_grasping: no table top cloud prt has been received, check the preproicessing node");
-			//rosservice call /GoToPose_service/setToolPose "{pos_x: 0.35, pos_y: 0.0, pos_z: 0.30, Yaw_angle_z: 3.14, Pitch_angle_y: 1.57, Roll_angle_x: 0.0, linear_velocity: 0.05}"
 
 			if (setToolPosSrv.call(srv2)) {
-				ROS_INFO("calling set toll Pose");
+				ROS_INFO("calling set tool Position (initial position)");
 			} else {
-				ROS_ERROR("calling set toll Pose");
+				ROS_ERROR("calling set tool Position (initial position)");
 				return 1;
 			}
-			//client.call(srv);
-		}
-		else
-		{
+
+		} else {
 			// Creating the KdTree object for the search method of the extraction
 			pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(
 					new pcl::search::KdTree<pcl::PointXYZ>);
@@ -1067,11 +1155,9 @@ int main(int argc, char *argv[]) {
 						<< cloud_cluster->points.size() << " data points."
 						<< std::endl;
 
-				if(!checkTheArmCloud(*cloud_cluster , tf_)){
+				if (!checkTheArmCloud(*cloud_cluster, tf_)) {
 					objects_clustered_points.push_back(cloud_cluster);
 				}
-
-
 
 			}
 
@@ -1081,16 +1167,143 @@ int main(int argc, char *argv[]) {
 			pcl::PointCloud<pcl::PointXYZ>::Ptr object_clustered_point(
 					new pcl::PointCloud<pcl::PointXYZ>);
 
-			if(sortedIndex.size() == 0){
-				if (client.call(srv)) {
-					ROS_INFO("calling home arm");
+
+			if(grasp_execution) {
+				ROS_INFO("Grasp Scenarios isRunning");
+				if(preGraspState){
+					moveArmToPose(graspBehindPosition,graspOrientation);
+					ROS_INFO("Executing pre_grasping");
+					bool isPreGraspFinished=false;
+					nh_.getParam("/GoToPose_service/inGoalPose", isPreGraspFinished);
+
+					ROS_INFO("isPreGraspFinished = %i",isPreGraspFinished);
+					ROS_INFO("distToTarget = %f",(currentArmPosition-targetArmPosition).norm());
+
+					if(isPreGraspFinished && (currentArmPosition-targetArmPosition).norm()<0.02){
+						preGraspState = false;
+						graspState = true;
+					}
+
+				}else if(graspState ){
+					moveArmToPose(graspPoint,graspOrientation);
+					ROS_INFO("Executing grasp point");
+					bool isPreGraspFinished=false;
+					nh_.getParam("/GoToPose_service/inGoalPose", isPreGraspFinished);
+
+					ROS_INFO("isPreGraspFinished = %i",isPreGraspFinished);
+					ROS_INFO("distToTarget = %f",(currentArmPosition-targetArmPosition).norm());
+
+					if(isPreGraspFinished && (currentArmPosition-targetArmPosition).norm()<0.01 ){
+						graspState = false;
+						closingGripperState = true;
+					}
+					graspBeginTime =current_time;
+				}else if(closingGripperState){
+					ROS_INFO("Closing the gripper");
+					if (gripperCloseSrv.call(closeGripperSrv)) {
+						ROS_INFO("closing the griper");
+					} else {
+						ROS_ERROR("closing the griper(sortIndex is not possible)");
+						return 1;
+					}
+
+					if(current_time - graspBeginTime > 8){
+						closingGripperState=false;
+						pickUpState=true;
+					}
+				}else if(pickUpState){
+					ROS_INFO("Picking Up the object");
+					Eigen::Vector3d pickUpPoint;
+					pickUpPoint<< graspPoint.x(),graspPoint.y(),0.15;
+					moveArmToPose(pickUpPoint,graspOrientation);
+					bool isPreGraspFinished=false;
+					nh_.getParam("/GoToPose_service/inGoalPose", isPreGraspFinished);
+
+					if(isPreGraspFinished && (currentArmPosition-targetArmPosition).norm()<0.01 ){
+						pickUpState = false;
+						moveState = true;
+					}
+
+				}else if(moveState){
+					ROS_INFO("move the object");
+					Eigen::Vector3d movePoint;
+					movePoint<< graspPoint.x(),graspPoint.y()+0.05,0.15;
+					moveArmToPose(movePoint,graspOrientation);
+					bool isPreGraspFinished=false;
+					nh_.getParam("/GoToPose_service/inGoalPose", isPreGraspFinished);
+
+					if(isPreGraspFinished && (currentArmPosition-targetArmPosition).norm()<0.01 ){
+						moveState = false;
+						placeState = true;
+					}
+
+				}else if(placeState){
+					ROS_INFO("place the object");
+					Eigen::Vector3d movePoint;
+					movePoint<< graspPoint.x(),graspPoint.y()+0.05, graspPoint.z()+0.005;
+					moveArmToPose(movePoint,graspOrientation);
+					bool isPreGraspFinished=false;
+					nh_.getParam("/GoToPose_service/inGoalPose", isPreGraspFinished);
+
+					if(isPreGraspFinished && (currentArmPosition-targetArmPosition).norm()<0.01 ){
+						placeState = false;
+						openGirperState = true;
+					}
+					graspBeginTime=current_time;
+				}else if(openGirperState){
+					ROS_INFO("Opening the gripper");
+					if (gripperOpenSrv.call(openGripperSrv)) {
+						ROS_INFO("opening the griper");
+					} else {
+						ROS_ERROR("opening the griper(sortIndex is not possible)");
+						return 1;
+					}
+
+					if(current_time - graspBeginTime > 8){
+						openGirperState=false;
+						HomeState=true;
+					}
+					//graspBeginTime = current_time;
+				}else if(HomeState){
+					ROS_INFO("home state");
+					Eigen::Vector3d movePoint;
+					movePoint<< graspBehindPosition.x(),graspBehindPosition.y()+0.05, graspBehindPosition.z()+0.1;
+					moveArmToPose(movePoint,graspOrientation);
+					bool isPreGraspFinished=false;
+					nh_.getParam("/GoToPose_service/inGoalPose", isPreGraspFinished);
+
+					if((isPreGraspFinished && (currentArmPosition-targetArmPosition).norm()<0.01) || current_time - graspBeginTime > 18 ){
+						HomeState = false;
+					}
+
+				}else{
+					ROS_INFO("home state");
+					grasp_execution = false;
+					if (homePoseSrv.call(srv)) {
+						ROS_INFO("calling home arm sortIndex is not possible");
+					} else {
+						ROS_ERROR("calling home arm sortIndex is not possible");
+						return 1;
+					}
+				}
+
+			}else if (sortedIndex.size() == 0) {
+				ROS_ERROR("sort index is not possible");
+
+				if (setToolPosSrv.call(srv2)) {
+					ROS_INFO("calling set tool Position (sortIndex is not possible)");
 				} else {
-					ROS_ERROR("home arm");
+					ROS_ERROR("calling set tool Position (sortIndex is not possible)");
 					return 1;
 				}
+//				if (homePoseSrv.call(srv)) {
+//					ROS_INFO("calling home arm sortIndex is not possible");
+//				} else {
+//					ROS_ERROR("calling home arm sortIndex is not possible");
+//					return 1;
+//				}
 			}
-			else
-			{
+			else {
 
 				object_clustered_point = objects_clustered_points.at(
 						sortedIndex.front());
@@ -1099,38 +1312,73 @@ int main(int argc, char *argv[]) {
 
 				// Object Pose detection
 				pcl::PointCloud<pcl::PointXYZ> object_frame_points;
-				ObjectCentericFrameRelatedToTable(*object_clustered_point, object_frame_points, objectPose);
-				visualization_msgs::MarkerArray axis = visualizeObjectAxis(objectPose);
+				ObjectCentericFrameRelatedToTable(*object_clustered_point,
+						object_frame_points, objectPose);
+				visualization_msgs::MarkerArray axis = visualizeObjectAxis(
+						objectPose);
 				marker_object_frame_pub.publish(axis);
 
 				// Grasp Pose detection
 				graspStrategyAndPointDetection(object_frame_points);
 
-				Eigen::Vector3d matchedPoint((grasp_pose.leftPoint.x+grasp_pose.rightPoint.x)/2,
-						(grasp_pose.leftPoint.y+grasp_pose.rightPoint.y)/2,
-						(grasp_pose.leftPoint.z+grasp_pose.rightPoint.z)/2);
+				// for debugging
+
+				Eigen::Vector3d matchedPoint(
+							(grasp_pose.leftPoint.x + grasp_pose.rightPoint.x) / 2,
+							(grasp_pose.leftPoint.y + grasp_pose.rightPoint.y) / 2,
+							(grasp_pose.leftPoint.z + grasp_pose.rightPoint.z) / 2);
+
+					std::cout<<"grasp_pose.leftPoint:" << grasp_pose.leftPoint << std::endl;
+					std::cout<<"matchedPoint:" << matchedPoint << std::endl;
+
+					Eigen::Vector3d graspPosition = objectPose * matchedPoint;
+
+					if (grasp.sideStrategy) {
+						ROS_INFO("Executing Side Strategy");
+						double distBehind = 0.16;
+						Eigen::Vector3d behindVec;
+						behindVec << -distBehind, 0, 0;
+						graspBehindPosition = graspPosition + (objectPose.linear() * behindVec);
+
+						behindVec << -0.08, 0, 0;
+						graspPoint = graspPosition + (objectPose.linear() * behindVec);
+
+						double yawOrientation = -1 * atan2(objectPose(0, 1), objectPose(1, 1));
+
+						if (yawOrientation > 0.6)
+							yawOrientation = 0.6;
+
+						if (yawOrientation < -0.6)
+							yawOrientation = -0.6;
+
+						graspOrientation << 3.14, 1.57, yawOrientation;
+
+					}
+
+					if (grasp.topStrategy) {
+						ROS_INFO("Executing Top Strategy");
+						double distBehind = 0.14;
+						Eigen::Vector3d behindVec;
+						behindVec << 0, 0, distBehind;
+						graspBehindPosition = graspPosition + behindVec;
+
+						behindVec << 0, 0, 0.09;
+						graspPoint = graspPosition + behindVec;
+
+						graspOrientation
+								<< (3.14 - (-1 * atan2(objectPose(0, 1), objectPose(1, 1)))), 3.14, 0;
+					}
+					// for debugging
+
+				std::cout << "graspBehindPosition =" << graspBehindPosition
+						<< std::endl;
+
+				std::cout << "graspOrientation =" << graspOrientation
+						<< std::endl;
 
 
 
-				std::cout << "matchedPoint ="<< matchedPoint<<std::endl;
-
-
-
-				Eigen::Vector3d graspPosition = objectPose
-													* matchedPoint;
-
-				std::cout << "graspPosition ="<< graspPosition <<std::endl;
-				//Eigen::vector3f rpy = objectPose.linear().;
-				double yaw = -1*atan2(objectPose(0,1), objectPose(1,1));
-				std::cout << "graspRotation =" << yaw<<std::endl;
-
-				double distBehind = 0.04;
-				Eigen::Vector3d behindVec;
-				behindVec<< -distBehind , 0, 0;
-				Eigen::Vector3d behindPosition = graspPosition + (objectPose.linear()*behindVec);
-
-				std::cout << "graspBehindPosition ="<< behindPosition <<std::endl;
-				}
+			}
 
 		}
 		ros::spinOnce();
@@ -1139,6 +1387,7 @@ int main(int argc, char *argv[]) {
 
 	}
 
-	return 0;
+	return 1;
+
 }
 

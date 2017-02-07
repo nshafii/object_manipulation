@@ -89,6 +89,8 @@ int main(int argc, char *argv[]) {
 
 	std::string topic = nh_.resolveName("/camera/depth/points");
 
+	ros::Duration(3.0).sleep();
+
 	while (ros::ok()) {
 		nh_.getParam("/preprocessing/arm_base_frame", arm_base_frame_);
 		nh_.getParam("/preprocessing/z_filter_min", z_filter_min_);
