@@ -1,16 +1,31 @@
 <launch>
 	<!-- Launch file with all available skills -->
 	
-	<include file="$(find openni2_launch)/launch/openni2.launch"/>	
+	<include file="$(find openni2_launch)/launch/openni2.launch">	
+		<arg name="depth_registration"
+        value="true" />
+	</include>
 	
 	<include file="$(find INESC_Robotis_Driver)/launch/robot_init.launch"/>    
 
 	<!-- node pkg="tf" type="static_transform_publisher" name="static_transform_publisher" args="-0.28 0.63 0.68 -0.48 0.7 -0.0  /world /camera_link 1000"/-->
 
-	<node pkg="tf" type="static_transform_publisher" name="static_transform_publisher" args="-0.28 0.63 0.70 -0.48 0.7 -0.0  /world /camera_link 1000"/>
+	<!-- node pkg="tf" type="static_transform_publisher" name="static_transform_publisher" args="-0.28 0.63 0.70 -0.48 0.7 -0.0  /world /camera_link 1000"/-->
+
+	<node pkg="tf" type="static_transform_publisher" name="static_transform_publisher" args="-0.3 0.63 0.71 -0.48 0.7 -0.0  /world /camera_link 1000"/>
+	
+	<!-- node pkg="tf" type="static_transform_publisher" name="static_transform_publisher" args="-0.295329 0.619922 0.614741 -0.064282 0.613828 -0.602114  /world /camera_rgb_optical_frame 1000"/-->
+	<!-- node pkg="tf" type="static_transform_publisher" name="static_transform_publisher" args="-0.315237 0.599037 0.640029 -0.493941 0.666532 -0.011126  /world /camera_link 1000"/-->
+
+
+	<!--node pkg="tf" type="static_transform_publisher" name="static_transform_publisher" args="-0.304412 0.587198 0.640854 -2.228182 -0.011203 -2.066908  /world /camera_rgb_optical_frame 1000"/-->
+
+	<!--node pkg="tf" type="static_transform_publisher" name="static_transform_publisher" args="-0.295329 0.629922 0.660029 -0.493941 0.666532 -0.011126  /world /camera_link 1000"/-->
 
 	<node pkg="rviz" type="rviz" name="rviz"/>
 
-	<node pkg="preprocessing" type="preprocessing" name="preprocessing"/>
+	<node pkg="preprocessing" type="preprocessing" name="preprocessing" output="log"/>
 
 </launch>
+
+
