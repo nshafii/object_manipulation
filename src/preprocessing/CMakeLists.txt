@@ -25,13 +25,12 @@ find_package(catkin REQUIRED COMPONENTS
 #find_package(Boost REQUIRED system filesystem date_time thread)
 
 #Build talker and listener
-include_directories(include 
+include_directories(
 	${catkin_INCLUDE_DIRS} 
 	${PCL_INCLUDE_DIRS})
 link_directories(${PCL_LIBRARY_DIRS}) 
 
 catkin_package(
-  INCLUDE_DIRS include
   LIBRARIES preprocessing
   CATKIN_DEPENDS message_runtime
  )

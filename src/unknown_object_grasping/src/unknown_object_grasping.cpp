@@ -1040,14 +1040,14 @@ int main(int argc, char *argv[]) {
 		ROS_INFO("calling home arm");
 	} else {
 		ROS_ERROR("home arm");
-		return 1;
+		//return 1;
 	}
 
 	if (gripperOpenSrv.call(openGripperSrv)) {
 		ROS_INFO("opening the griper");
 	} else {
 		ROS_ERROR("opening the griper Erro");
-		return 1;
+		//return 1;
 	}
 
 	ros::Duration(3).sleep();
@@ -1071,10 +1071,7 @@ int main(int argc, char *argv[]) {
 
 	std::string topic = nh_.resolveName("/table_top_cloud");
 
-	nh_.setParam("/preprocessing/x_filter_min", 0.25);
-	nh_.setParam("/preprocessing/z_filter_max", 0.2);
-	nh_.setParam("/preprocessing/x_filter_max", 0.7);
-	nh_.setParam("/preprocessing/voxel_size", 0.001);
+	nh_.setParam("/preprocessing/voxel_size", 0.0005);
 
 	ros::ServiceServer service = nh_.advertiseService("graspNearestObject",
 			graspNearestObject);
@@ -1107,7 +1104,7 @@ int main(int argc, char *argv[]) {
 				ros::topic::waitForMessage<pcl::PointCloud<pcl::PointXYZ> >(
 						topic, nh_, ros::Duration(10.0));
 
-		if (!table_top_cloud_prt or table_top_cloud_prt->points.size() < 100) {
+		if (!table_top_cloud_prt or table_top_cloud_prt->points.size() < 50) {
 			ROS_ERROR(
 					"unknown_object_grasping: no table top cloud prt has been received, check the preproicessing node");
 
@@ -1115,7 +1112,14 @@ int main(int argc, char *argv[]) {
 				ROS_INFO("calling set tool Position (initial position)");
 			} else {
 				ROS_ERROR("calling set tool Position (initial position)");
-				return 1;
+				//return 1;
+			}
+
+			if (gripperOpenSrv.call(openGripperSrv)) {
+				ROS_INFO("opening the griper");
+			} else {
+				ROS_ERROR("opening the griper Erro");
+				//return 1;
 			}
 
 		} else {
@@ -1126,8 +1130,8 @@ int main(int argc, char *argv[]) {
 
 			std::vector<pcl::PointIndices> cluster_indices;
 			pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
-			ec.setClusterTolerance(0.02); // 2cm
-			ec.setMinClusterSize(50);
+			ec.setClusterTolerance(0.03); // 2cm
+			ec.setMinClusterSize(49);
 			ec.setMaxClusterSize(25000);
 			ec.setSearchMethod(tree);
 			ec.setInputCloud(table_top_cloud_prt);
@@ -1204,7 +1208,7 @@ int main(int argc, char *argv[]) {
 						ROS_INFO("closing the griper");
 					} else {
 						ROS_ERROR("closing the griper(sortIndex is not possible)");
-						return 1;
+						//return 1;
 					}
 
 					if(current_time - graspBeginTime > 8){
@@ -1214,7 +1218,7 @@ int main(int argc, char *argv[]) {
 				}else if(pickUpState){
 					ROS_INFO("Picking Up the object");
 					Eigen::Vector3d pickUpPoint;
-					pickUpPoint<< graspPoint.x(),graspPoint.y(),0.15;
+					pickUpPoint<< graspPoint.x(),graspPoint.y(),0.12;
 					moveArmToPose(pickUpPoint,graspOrientation);
 					bool isPreGraspFinished=false;
 					nh_.getParam("/GoToPose_service/inGoalPose", isPreGraspFinished);
@@ -1227,7 +1231,7 @@ int main(int argc, char *argv[]) {
 				}else if(moveState){
 					ROS_INFO("move the object");
 					Eigen::Vector3d movePoint;
-					movePoint<< graspPoint.x(),graspPoint.y()+0.05,0.15;
+					movePoint<< graspPoint.x(),0.2,0.12;
 					moveArmToPose(movePoint,graspOrientation);
 					bool isPreGraspFinished=false;
 					nh_.getParam("/GoToPose_service/inGoalPose", isPreGraspFinished);
@@ -1240,7 +1244,7 @@ int main(int argc, char *argv[]) {
 				}else if(placeState){
 					ROS_INFO("place the object");
 					Eigen::Vector3d movePoint;
-					movePoint<< graspPoint.x(),graspPoint.y()+0.05, graspPoint.z()+0.005;
+					movePoint<< graspPoint.x(),0.2, graspPoint.z()+0.005;
 					moveArmToPose(movePoint,graspOrientation);
 					bool isPreGraspFinished=false;
 					nh_.getParam("/GoToPose_service/inGoalPose", isPreGraspFinished);
@@ -1256,7 +1260,7 @@ int main(int argc, char *argv[]) {
 						ROS_INFO("opening the griper");
 					} else {
 						ROS_ERROR("opening the griper(sortIndex is not possible)");
-						return 1;
+						//return 1;
 					}
 
 					if(current_time - graspBeginTime > 8){
@@ -1283,7 +1287,7 @@ int main(int argc, char *argv[]) {
 						ROS_INFO("calling home arm sortIndex is not possible");
 					} else {
 						ROS_ERROR("calling home arm sortIndex is not possible");
-						return 1;
+						//return 1;
 					}
 				}
 
@@ -1294,7 +1298,7 @@ int main(int argc, char *argv[]) {
 					ROS_INFO("calling set tool Position (sortIndex is not possible)");
 				} else {
 					ROS_ERROR("calling set tool Position (sortIndex is not possible)");
-					return 1;
+					//return 1;
 				}
 //				if (homePoseSrv.call(srv)) {
 //					ROS_INFO("calling home arm sortIndex is not possible");

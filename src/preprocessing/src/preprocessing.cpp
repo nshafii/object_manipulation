@@ -71,12 +71,21 @@ int main(int argc, char *argv[]) {
 	double table_z_filter_min_;
 
 	nh_.setParam("/preprocessing/arm_base_frame", "world");
+//	nh_.setParam("/preprocessing/z_filter_min", -0.1);
+//	nh_.setParam("/preprocessing/z_filter_max", 0.2);
+//	nh_.setParam("/preprocessing/y_filter_min", 0);
+//	nh_.setParam("/preprocessing/y_filter_max", 0.40);
+//	nh_.setParam("/preprocessing/x_filter_min", 0.15);
+//	nh_.setParam("/preprocessing/x_filter_max", 0.75);
+//	nh_.setParam("/preprocessing/voxel_size", 0.005);
+//	nh_.setParam("/preprocessing/table_z_filter_min", 0.01);
+
 	nh_.setParam("/preprocessing/z_filter_min", -0.2);
-	nh_.setParam("/preprocessing/z_filter_max", 0.3);
-	nh_.setParam("/preprocessing/y_filter_min", -0.30);
-	nh_.setParam("/preprocessing/y_filter_max", 0.30);
+	nh_.setParam("/preprocessing/z_filter_max", 0.2);
+	nh_.setParam("/preprocessing/y_filter_min", -0.2);
+	nh_.setParam("/preprocessing/y_filter_max", 0.40);
 	nh_.setParam("/preprocessing/x_filter_min", 0.25);
-	nh_.setParam("/preprocessing/x_filter_max", 0.75);
+	nh_.setParam("/preprocessing/x_filter_max", 0.7);
 	nh_.setParam("/preprocessing/voxel_size", 0.005);
 	nh_.setParam("/preprocessing/table_z_filter_min", 0.01);
 
