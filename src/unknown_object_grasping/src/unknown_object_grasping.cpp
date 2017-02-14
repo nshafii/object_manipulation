@@ -25,15 +25,15 @@
 #include <pcl/common/pca.h>
 
 //Arm driver includes
-#include "INESC_Robotis_Driver/SetToolPose.h"
-#include "INESC_Robotis_Driver/SetToolPosition.h"
-#include "INESC_Robotis_Driver/GetToolPose.h"
-#include "INESC_Robotis_Driver/HomeArm.h"
+//#include "INESC_Robotis_Driver/SetToolPose.h"
+//#include "INESC_Robotis_Driver/SetToolPosition.h"
+//#include "INESC_Robotis_Driver/GetToolPose.h"
+//#include "INESC_Robotis_Driver/HomeArm.h"
 
 //Griper driver includes
-#include "inesc_3_finger_gripper_driver/Stop.h"
-#include "inesc_3_finger_gripper_driver/Open.h"
-#include "inesc_3_finger_gripper_driver/Close.h"
+//#include "inesc_3_finger_gripper_driver/Stop.h"
+//#include "inesc_3_finger_gripper_driver/Open.h"
+//#include "inesc_3_finger_gripper_driver/Close.h"
 
 // visualization
 #include <visualization_msgs/Marker.h>
@@ -51,19 +51,19 @@ typedef struct {
 	geometry_msgs::Point rightPoint;
 } grasp_width;
 
-ros::ServiceClient setToolPosSrv;
-ros::ServiceClient setToolPositionSrv;
-ros::ServiceClient getToolPosSrv;
+
 Eigen::Vector3d targetArmPosition;
 Eigen::Affine3d objectPose;
 double orientation;
 
-ros::ServiceClient homePoseSrv;
-
-INESC_Robotis_Driver::HomeArm srv;
-inesc_3_finger_gripper_driver::Close closeGripperSrv;
-inesc_3_finger_gripper_driver::Open openGripperSrv;
-INESC_Robotis_Driver::GetToolPose getToolPose;
+//ros::ServiceClient homePoseSrv;
+//ros::ServiceClient setToolPosSrv;
+//ros::ServiceClient setToolPositionSrv;
+//ros::ServiceClient getToolPosSrv;
+//INESC_Robotis_Driver::HomeArm srv;
+//inesc_3_finger_gripper_driver::Close closeGripperSrv;
+//inesc_3_finger_gripper_driver::Open openGripperSrv;
+//INESC_Robotis_Driver::GetToolPose getToolPose;
 
 double graspBeginTime;
 bool grasp_execution = false;
@@ -231,12 +231,6 @@ void ObjectCentericFrameRelatedToTable(
 	{
 
 		ROS_INFO("sign ambiguity has been solved");
-
-//		Eigen::Affine3d poseAmb = Eigen::Translation3d(centroid)
-//				* Eigen::AngleAxisd(M_PI, Eigen::Vector3d::UnitZ());
-
-//		pcl::transformPointCloud(*modelTemp, transformed_cloud,
-//				poseAmb.inverse());
 
 		pose = Eigen::Translation3d(centroid)
 				* Eigen::AngleAxisd(orientation + M_PI,
@@ -434,27 +428,13 @@ void graspStrategyAndPointDetection(
 
 			grasp_pose.rightPoint.z = (minZ + maxZ) / 2;
 
-//			grasp_pose.leftPoint.z = ((foundIter + 0.5) * zInterval) + minZ;
-//
-//			grasp_pose.rightPoint.z = ((foundIter + 0.5) * zInterval) + minZ;
-//
-//			grasp_pose.leftPoint.y = orientationCorrection * yDimention / 2;
-//
-//			grasp_pose.rightPoint.y = orientationCorrection * yDimention / 2;
-//
-//			grasp_pose.leftPoint.x = fabs(maxArray[foundIter] - minArray[foundIter]) / 2;
-//
-//			grasp_pose.rightPoint.x = -1 * fabs(maxArray[foundIter] - minArray[foundIter])
-//					/ 2;
 
 		}
 
 	}
 
 	// Analyze the face of the object related to view Point grasp vertical
-//
-//	else if (xDimention > (zDimention + 0.02)
-//			&& yDimention > (zDimention + 0.02))
+
 	else if (xDimention > (zDimention + 0.02) && yDimention > 0.14) {
 
 		ROS_INFO(" flat object , x and y are the principale axis");
@@ -466,10 +446,6 @@ void graspStrategyAndPointDetection(
 		grasp.topStrategy = false;
 
 		double xInterval = xDimention / devisionSize;
-
-		//std::map< int, pair<double,double> > viewMap;
-
-		//std::vector < std::vector<double> > viewMap;
 
 		double minArray[devisionSize];
 
@@ -556,18 +532,6 @@ void graspStrategyAndPointDetection(
 
 		grasp_pose.rightPoint.z = maxZ;
 
-//		grasp_pose.leftPoint.x = ((foundIter + 0.5) * xInterval) + minX;
-//
-//		grasp_pose.rightPoint.x = ((foundIter + 0.5) * xInterval) + minX;
-//
-//		grasp_pose.leftPoint.y = orientationCorrection * yDimention / 2;
-//
-//		grasp_pose.rightPoint.y = orientationCorrection * yDimention / 2;
-//
-//		grasp_pose.leftPoint.z = fabs(maxArray[foundIter] - minArray[foundIter]) / 2;
-//
-//
-//		grasp_pose.rightPoint.z = -1 * fabs(maxArray[foundIter] - minArray[foundIter]) / 2;
 
 	}
 
@@ -584,10 +548,6 @@ void graspStrategyAndPointDetection(
 		grasp.flatStrategy = false;
 
 		double xInterval = xDimention / devisionSize;
-
-		//std::map< int, pair<double,double> > viewMap;
-
-		//std::vector < std::vector<double> > viewMap;
 
 		double minArray[devisionSize];
 
@@ -671,17 +631,6 @@ void graspStrategyAndPointDetection(
 		grasp_pose.leftPoint.z = zDimention / 2;
 
 		grasp_pose.rightPoint.z = zDimention / 2;
-//		grasp_pose.leftPoint.x = ((foundIter + 0.5) * xInterval) + minX;
-//
-//		grasp_pose.rightPoint.x = ((foundIter + 0.5) * xInterval) + minX;
-//
-//		grasp_pose.leftPoint.y = fabs(maxArray[foundIter] - minArray[foundIter]) / 2;
-//
-//		grasp_pose.rightPoint.y = -1 * fabs(maxArray[foundIter] - minArray[foundIter]) / 2;
-//
-//		grasp_pose.leftPoint.z = zDimention / 2;
-//
-//		grasp_pose.rightPoint.z = zDimention / 2;
 
 	}
 
@@ -944,11 +893,11 @@ bool graspNearestObject(
 }
 
 void moveArmToPose(Eigen::Vector3d position, Eigen::Vector3d orientation){
+// todo
+	//INESC_Robotis_Driver::SetToolPose moveToPose;
 
-	INESC_Robotis_Driver::SetToolPose moveToPose;
-
-	moveToPose.request.pos_x = position.x();
-	moveToPose.request.pos_y = position.y();
+//	moveToPose.request.pos_x = position.x();
+//	moveToPose.request.pos_y = position.y();
 
 	if(fabs(orientation.y()-3.14) < 0.1 && position.z() < 0.1){
 		position.z()= 0.1;
@@ -957,51 +906,21 @@ void moveArmToPose(Eigen::Vector3d position, Eigen::Vector3d orientation){
 		position.z()= 0;
 		ROS_ERROR("In side strategy, colliding with the table");
 	}
-	moveToPose.request.pos_z = position.z();
+//	moveToPose.request.pos_z = position.z();
 
 	targetArmPosition = position;
-	moveToPose.request.Yaw_angle_z = orientation.x();
-	moveToPose.request.Pitch_angle_y = orientation.y();
-	moveToPose.request.Roll_angle_x = orientation.z();
-	moveToPose.request.linear_velocity = 0.05;
+//	moveToPose.request.Yaw_angle_z = orientation.x();
+//	moveToPose.request.Pitch_angle_y = orientation.y();
+//	moveToPose.request.Roll_angle_x = orientation.z();
+//	moveToPose.request.linear_velocity = 0.05;
 
-	if (setToolPosSrv.call(moveToPose)) {
-		ROS_INFO("calling set tool Pose moveToPose, for the Position =(%f, %f, %f) and orientation= (%f, %f, %f)", position.x()
-				, position.y(), position.z(), orientation.x(), orientation.y(), orientation.z());
-	} else {
-		ROS_ERROR(" Error moveToPose is not reachable for the Position =(%f, %f, %f) and orientation= (%f, %f, %f)", position.x()
-				, position.y(), position.z(), orientation.x(), orientation.y(), orientation.z());
-	}
-
-}
-
-void moveArmToPosition(Eigen::Vector3d position){
-
-	INESC_Robotis_Driver::SetToolPosition moveToPose;
-
-	moveToPose.request.pos_x = position.x();
-	moveToPose.request.pos_y = position.y();
-	moveToPose.request.pos_z = position.z();
-
-//	if(fabs(orientation.y()-3.14) < 0.1 && position.z() < 0.1){
-//		moveToPose.request.pos_z = 0.1;
-//		ROS_ERROR("In top strategy, colliding with the table");
-//	}else if (fabs(orientation.y()-1.57)< 0.1 && position.z() < 0){
-//		moveToPose.request.pos_z = 0;
-//		ROS_ERROR("In side strategy, colliding with the table");
-//	}else{
-//		moveToPose.request.pos_z = position.z();
+//	if (setToolPosSrv.call(moveToPose)) {
+//		ROS_INFO("calling set tool Pose moveToPose, for the Position =(%f, %f, %f) and orientation= (%f, %f, %f)", position.x()
+//				, position.y(), position.z(), orientation.x(), orientation.y(), orientation.z());
+//	} else {
+//		ROS_ERROR(" Error moveToPose is not reachable for the Position =(%f, %f, %f) and orientation= (%f, %f, %f)", position.x()
+//				, position.y(), position.z(), orientation.x(), orientation.y(), orientation.z());
 //	}
-	targetArmPosition = position;
-	moveToPose.request.linear_velocity = 0.05;
-
-	if (setToolPositionSrv.call(moveToPose)) {
-		ROS_INFO("calling set tool Pose moveToPose, for the Position =(%f, %f, %f)", position.x()
-				, position.y(), position.z());
-	} else {
-		ROS_ERROR(" Error moveToPose is not reachable for the Position =(%f, %f, %f)", position.x()
-				, position.y(), position.z());
-	}
 
 }
 
@@ -1018,48 +937,41 @@ int main(int argc, char *argv[]) {
 
 	tf::TransformListener tf_;
 
-	setToolPosSrv = nh_.serviceClient<INESC_Robotis_Driver::SetToolPose>(
-			"/GoToPose_service/setToolPose");
+// Todo write the initializer for the services and actions
 
-	setToolPositionSrv = nh_.serviceClient<INESC_Robotis_Driver::SetToolPosition>(
-				"/GoToPose_service/setToolPosition");
+//	setToolPosSrv = nh_.serviceClient<INESC_Robotis_Driver::SetToolPose>(
+//			"/GoToPose_service/setToolPose");
+//
+//	setToolPositionSrv = nh_.serviceClient<INESC_Robotis_Driver::SetToolPosition>(
+//				"/GoToPose_service/setToolPosition");
+//
+//	getToolPosSrv = nh_.serviceClient<INESC_Robotis_Driver::GetToolPose>(
+//			"/GoToPose_service/getToolPos");
+//
+//	homePoseSrv = nh_.serviceClient<INESC_Robotis_Driver::HomeArm>(
+//			"/GoToPose_service/homeArm");
+//
+//	ros::ServiceClient gripperCloseSrv = nh_.serviceClient<inesc_3_finger_gripper_driver::Close>(
+//				"/Gripper_driver/closeGripper");
+//
+//	ros::ServiceClient gripperOpenSrv = nh_.serviceClient<inesc_3_finger_gripper_driver::Open>(
+//					"/Gripper_driver/openGripper");
 
-	getToolPosSrv = nh_.serviceClient<INESC_Robotis_Driver::GetToolPose>(
-			"/GoToPose_service/getToolPos");
+// Todo Go to the pose to see the objects
+//	if (homePoseSrv.call(srv)) {
+//		ROS_INFO("calling home arm");
+//	} else {
+//		ROS_ERROR("home arm");
+//	}
 
-	homePoseSrv = nh_.serviceClient<INESC_Robotis_Driver::HomeArm>(
-			"/GoToPose_service/homeArm");
-
-	ros::ServiceClient gripperCloseSrv = nh_.serviceClient<inesc_3_finger_gripper_driver::Close>(
-				"/Gripper_driver/closeGripper");
-
-	ros::ServiceClient gripperOpenSrv = nh_.serviceClient<inesc_3_finger_gripper_driver::Open>(
-					"/Gripper_driver/openGripper");
-
-	if (homePoseSrv.call(srv)) {
-		ROS_INFO("calling home arm");
-	} else {
-		ROS_ERROR("home arm");
-		//return 1;
-	}
-
-	if (gripperOpenSrv.call(openGripperSrv)) {
-		ROS_INFO("opening the griper");
-	} else {
-		ROS_ERROR("opening the griper Erro");
-		//return 1;
-	}
+// Todo
+//	if (gripperOpenSrv.call(openGripperSrv)) {
+//		ROS_INFO("opening the griper");
+//	} else {
+//		ROS_ERROR("opening the griper Erro");
+//	}
 
 	ros::Duration(3).sleep();
-
-	INESC_Robotis_Driver::SetToolPose srv2;
-	srv2.request.pos_x = 0.2;
-	srv2.request.pos_y = 0.0;
-	srv2.request.pos_z = 0.3;
-	srv2.request.Yaw_angle_z = 3.14;
-	srv2.request.Pitch_angle_y = 1.57;
-	srv2.request.Roll_angle_x = 0;
-	srv2.request.linear_velocity = 0.05;
 
 	std::string topic3 = nh_.resolveName("object_cloud");
 
@@ -1080,21 +992,21 @@ int main(int argc, char *argv[]) {
 
 
 		double current_time = ros::Time::now().toSec();
-
-		if (getToolPosSrv.call(getToolPose))
-						{
-							ROS_INFO("calling get toll Pose");
-						}
-						else {
-							ROS_ERROR("calling get toll Pose");
-							//return 1;
-						}
-
 		Eigen::Vector3d currentArmPosition;
-		currentArmPosition << getToolPose.response.pos_x, getToolPose.response.pos_y, getToolPose.response.pos_z;
-
 		Eigen::Vector3d currentArmOrientation;
-		currentArmOrientation << getToolPose.response.zyx_angle_x, getToolPose.response.zyx_angle_y, getToolPose.response.zyx_angle_z;
+
+
+//		Todo not needed
+//		if (getToolPosSrv.call(getToolPose))
+//						{
+//							ROS_INFO("calling get toll Pose");
+//						}
+//						else {
+//							ROS_ERROR("calling get toll Pose");
+//							//return 1;
+//						}
+//		currentArmPosition << getToolPose.response.pos_x, getToolPose.response.pos_y, getToolPose.response.pos_z;
+//		currentArmOrientation << getToolPose.response.zyx_angle_x, getToolPose.response.zyx_angle_y, getToolPose.response.zyx_angle_z;
 
 		std::cout<< "currentArmPosition:" << currentArmPosition << std::endl;
 		std::cout<< "currentArmOrientation:" << currentArmOrientation << std::endl;
@@ -1107,20 +1019,21 @@ int main(int argc, char *argv[]) {
 		if (!table_top_cloud_prt or table_top_cloud_prt->points.size() < 50) {
 			ROS_ERROR(
 					"unknown_object_grasping: no table top cloud prt has been received, check the preproicessing node");
+//todo 	Go the view position
+//			if (setToolPosSrv.call(srv2)) {
+//				ROS_INFO("calling set tool Position (initial position)");
+//			} else {
+//				ROS_ERROR("calling set tool Position (initial position)");
+//				//return 1;
+//			}
 
-			if (setToolPosSrv.call(srv2)) {
-				ROS_INFO("calling set tool Position (initial position)");
-			} else {
-				ROS_ERROR("calling set tool Position (initial position)");
-				//return 1;
-			}
-
-			if (gripperOpenSrv.call(openGripperSrv)) {
-				ROS_INFO("opening the griper");
-			} else {
-				ROS_ERROR("opening the griper Erro");
-				//return 1;
-			}
+//todo 	Open the gripper
+//			if (gripperOpenSrv.call(openGripperSrv)) {
+//				ROS_INFO("opening the griper");
+//			} else {
+//				ROS_ERROR("opening the griper Erro");
+//				//return 1;
+//			}
 
 		} else {
 			// Creating the KdTree object for the search method of the extraction
@@ -1182,7 +1095,7 @@ int main(int argc, char *argv[]) {
 
 					ROS_INFO("isPreGraspFinished = %i",isPreGraspFinished);
 					ROS_INFO("distToTarget = %f",(currentArmPosition-targetArmPosition).norm());
-
+					// todo
 					if(isPreGraspFinished && (currentArmPosition-targetArmPosition).norm()<0.02){
 						preGraspState = false;
 						graspState = true;
@@ -1196,7 +1109,7 @@ int main(int argc, char *argv[]) {
 
 					ROS_INFO("isPreGraspFinished = %i",isPreGraspFinished);
 					ROS_INFO("distToTarget = %f",(currentArmPosition-targetArmPosition).norm());
-
+					// todo
 					if(isPreGraspFinished && (currentArmPosition-targetArmPosition).norm()<0.01 ){
 						graspState = false;
 						closingGripperState = true;
@@ -1204,12 +1117,14 @@ int main(int argc, char *argv[]) {
 					graspBeginTime =current_time;
 				}else if(closingGripperState){
 					ROS_INFO("Closing the gripper");
-					if (gripperCloseSrv.call(closeGripperSrv)) {
-						ROS_INFO("closing the griper");
-					} else {
-						ROS_ERROR("closing the griper(sortIndex is not possible)");
-						//return 1;
-					}
+
+					//todo close the gripper
+//					if (gripperCloseSrv.call(closeGripperSrv)) {
+//						ROS_INFO("closing the griper");
+//					} else {
+//						ROS_ERROR("closing the griper(sortIndex is not possible)");
+//						//return 1;
+//					}
 
 					if(current_time - graspBeginTime > 8){
 						closingGripperState=false;
@@ -1222,7 +1137,7 @@ int main(int argc, char *argv[]) {
 					moveArmToPose(pickUpPoint,graspOrientation);
 					bool isPreGraspFinished=false;
 					nh_.getParam("/GoToPose_service/inGoalPose", isPreGraspFinished);
-
+					//todo
 					if(isPreGraspFinished && (currentArmPosition-targetArmPosition).norm()<0.01 ){
 						pickUpState = false;
 						moveState = true;
@@ -1235,7 +1150,7 @@ int main(int argc, char *argv[]) {
 					moveArmToPose(movePoint,graspOrientation);
 					bool isPreGraspFinished=false;
 					nh_.getParam("/GoToPose_service/inGoalPose", isPreGraspFinished);
-
+					//todo
 					if(isPreGraspFinished && (currentArmPosition-targetArmPosition).norm()<0.01 ){
 						moveState = false;
 						placeState = true;
@@ -1256,12 +1171,14 @@ int main(int argc, char *argv[]) {
 					graspBeginTime=current_time;
 				}else if(openGirperState){
 					ROS_INFO("Opening the gripper");
-					if (gripperOpenSrv.call(openGripperSrv)) {
-						ROS_INFO("opening the griper");
-					} else {
-						ROS_ERROR("opening the griper(sortIndex is not possible)");
-						//return 1;
-					}
+
+					//todo Open the girpper
+//					if (gripperOpenSrv.call(openGripperSrv)) {
+//						ROS_INFO("opening the griper");
+//					} else {
+//						ROS_ERROR("opening the griper(sortIndex is not possible)");
+//
+//					}
 
 					if(current_time - graspBeginTime > 8){
 						openGirperState=false;
@@ -1283,28 +1200,23 @@ int main(int argc, char *argv[]) {
 				}else{
 					ROS_INFO("home state");
 					grasp_execution = false;
-					if (homePoseSrv.call(srv)) {
-						ROS_INFO("calling home arm sortIndex is not possible");
-					} else {
-						ROS_ERROR("calling home arm sortIndex is not possible");
-						//return 1;
-					}
+					// todo Go Back to the position that see the objects
+//					if (homePoseSrv.call(srv)) {
+//						ROS_INFO("calling home arm sortIndex is not possible");
+//					} else {
+//						ROS_ERROR("calling home arm sortIndex is not possible");
+//						//return 1;
+//					}
 				}
 
 			}else if (sortedIndex.size() == 0) {
 				ROS_ERROR("sort index is not possible");
-
-				if (setToolPosSrv.call(srv2)) {
-					ROS_INFO("calling set tool Position (sortIndex is not possible)");
-				} else {
-					ROS_ERROR("calling set tool Position (sortIndex is not possible)");
-					//return 1;
-				}
-//				if (homePoseSrv.call(srv)) {
-//					ROS_INFO("calling home arm sortIndex is not possible");
+				// todo Go Back to the position that see the objects
+//				if (setToolPosSrv.call(srv2)) {
+//					ROS_INFO("calling set tool Position (sortIndex is not possible)");
 //				} else {
-//					ROS_ERROR("calling home arm sortIndex is not possible");
-//					return 1;
+//					ROS_ERROR("calling set tool Position (sortIndex is not possible)");
+//					//return 1;
 //				}
 			}
 			else {

@@ -20,7 +20,6 @@ find_package(catkin REQUIRED COMPONENTS
 	cmake_modules
 	genmsg
     message_generation
-	INESC_Robotis_Driver
 )
 
 #find_package(Boost REQUIRED system filesystem date_time thread)
