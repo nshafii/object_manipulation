@@ -69,8 +69,8 @@ int main(int argc, char *argv[]) {
 			x_filter_min_, x_filter_max_;
 	double voxel_size_;
 	double table_z_filter_min_;
-
-	nh_.setParam("/preprocessing/arm_base_frame", "world");
+	double table_z_filter_max_;
+//	nh_.setParam("/preprocessing/arm_base_frame", "world");
 //	nh_.setParam("/preprocessing/z_filter_min", -0.1);
 //	nh_.setParam("/preprocessing/z_filter_max", 0.2);
 //	nh_.setParam("/preprocessing/y_filter_min", 0);
@@ -80,14 +80,14 @@ int main(int argc, char *argv[]) {
 //	nh_.setParam("/preprocessing/voxel_size", 0.005);
 //	nh_.setParam("/preprocessing/table_z_filter_min", 0.01);
 
-	nh_.setParam("/preprocessing/z_filter_min", -0.2);
-	nh_.setParam("/preprocessing/z_filter_max", 0.2);
-	nh_.setParam("/preprocessing/y_filter_min", -0.2);
-	nh_.setParam("/preprocessing/y_filter_max", 0.40);
-	nh_.setParam("/preprocessing/x_filter_min", 0.25);
-	nh_.setParam("/preprocessing/x_filter_max", 0.7);
-	nh_.setParam("/preprocessing/voxel_size", 0.005);
-	nh_.setParam("/preprocessing/table_z_filter_min", 0.01);
+//	nh_.setParam("/preprocessing/z_filter_min", -0.2);
+//	nh_.setParam("/preprocessing/z_filter_max", 0.2);
+//	nh_.setParam("/preprocessing/y_filter_min", -0.2);
+//	nh_.setParam("/preprocessing/y_filter_max", 0.40);
+//	nh_.setParam("/preprocessing/x_filter_min", 0.25);
+//	nh_.setParam("/preprocessing/x_filter_max", 0.7);
+//	nh_.setParam("/preprocessing/voxel_size", 0.005);
+//	nh_.setParam("/preprocessing/table_z_filter_min", 0.01);
 
 	std::string topic2 = nh_.resolveName("table_top_cloud");
 	uint32_t queue_size = 1;
@@ -110,6 +110,7 @@ int main(int argc, char *argv[]) {
 		nh_.getParam("/preprocessing/x_filter_max", x_filter_max_);
 		nh_.getParam("/preprocessing/voxel_size", voxel_size_);
 		nh_.getParam("/preprocessing/table_z_filter_min", table_z_filter_min_);
+		nh_.getParam("/preprocessing/table_z_filter_max", table_z_filter_max_);
 
 		ros::Time start_time = ros::Time::now();
 		sensor_msgs::PointCloud2::ConstPtr kinect_sensor_cloud =
@@ -185,7 +186,9 @@ int main(int argc, char *argv[]) {
 					new pcl::PointCloud<pcl::PointXYZ>);
 			grid_.setInputCloud(cloud_filtered_ptr);
 			grid_.filter(*cloud_downsampled_ptr);
+
 			ROS_INFO("Step 2 done");
+
 
 			// Step 3 : Detect the plane
 			pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> n3d_;
@@ -252,6 +255,8 @@ int main(int argc, char *argv[]) {
 			tf::Transform table_plane_trans;
 			table_plane_trans = getPlaneTransform(*table_coefficients_ptr, -1);
 
+
+
 			tf::Vector3 flat_table_pos;
 			double avg_x, avg_y, avg_z;
 			avg_x = avg_y = avg_z = 0;
@@ -263,6 +268,8 @@ int main(int argc, char *argv[]) {
 			avg_x /= table_projected_ptr->points.size();
 			avg_y /= table_projected_ptr->points.size();
 			avg_z /= table_projected_ptr->points.size();
+
+			nh_.setParam("/preprocessing/table_z", avg_z);
 
 			flat_table_pos[0] = avg_x;
 			flat_table_pos[1] = avg_y;
@@ -294,7 +301,11 @@ int main(int argc, char *argv[]) {
 			prism_.setInputCloud(cloud_objects);
 			prism_.setInputPlanarHull(table_hull_ptr);
 
-			double table_z_filter_max_ = 0.5;
+
+
+			std::cout << "table_z_filter_max_: " << table_z_filter_max_ <<std:: endl;
+
+			std::cout << "table_z_filter_min_: " << table_z_filter_min_ <<std:: endl;
 
 			prism_.setHeightLimits(table_z_filter_min_, table_z_filter_max_);
 			prism_.segment(cloud_object_indices);
@@ -303,6 +314,7 @@ int main(int argc, char *argv[]) {
 					new pcl::PointCloud<pcl::PointXYZ>);
 			pcl::ExtractIndices<pcl::PointXYZ> extract_object_indices;
 			extract_object_indices.setInputCloud(cloud_objects);
+
 			extract_object_indices.setIndices(
 					boost::make_shared<const pcl::PointIndices>(
 							cloud_object_indices));

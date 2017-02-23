@@ -39,23 +39,32 @@
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <eigen_conversions/eigen_msg.h>
+#include <interactive_markers/interactive_marker_server.h>
+#include <interactive_markers/menu_handler.h>
 
 #include <unknown_object_grasping/GraspingNearestObject.h>
+
+using namespace interactive_markers;
 
 typedef struct {
 	bool sideStrategy, topStrategy, flatStrategy;
 } grasp_strategy;
+
+
 
 typedef struct {
 	geometry_msgs::Point leftPoint;
 	geometry_msgs::Point rightPoint;
 } grasp_width;
 
+boost::shared_ptr<InteractiveMarkerServer> server;
+
 ros::ServiceClient setToolPosSrv;
 ros::ServiceClient setToolPositionSrv;
 ros::ServiceClient getToolPosSrv;
 Eigen::Vector3d targetArmPosition;
 Eigen::Affine3d objectPose;
+double table_z_position =0;
 double orientation;
 
 ros::ServiceClient homePoseSrv;
@@ -70,6 +79,8 @@ bool grasp_execution = false;
 Eigen::Vector3d graspBehindPosition;
 Eigen::Vector3d graspPoint;
 Eigen::Vector3d graspOrientation;
+
+Eigen::Vector3d rvizSelectedPosition = Eigen::Vector3d::Zero();
 
 bool preGraspState =true;
 bool graspState =false;
@@ -777,7 +788,7 @@ void SortDistToBase(
 	for (int i = 0; i < objects_clustered_points.size(); ++i) {
 		Eigen::Vector3d temp_pose;
 		CalcAverageDistToBase(*objects_clustered_points.at(i), temp_pose);
-		dist.push_back(temp_pose.norm());
+		dist.push_back((temp_pose-rvizSelectedPosition).norm());
 	}
 
 	std::cout << "here size of dist :" << dist.size() << std::endl;
@@ -807,6 +818,14 @@ geometry_msgs::Point eigenVectorToPointMsg(Eigen::Vector3d vec) {
 	out.y = vec.y();
 	out.z = vec.z();
 	return out;
+}
+
+void clicked_point_rviz(const geometry_msgs::PointStamped& msg)
+{
+	rvizSelectedPosition<<msg.point.x , msg.point.y, msg.point.z ;
+	ROS_INFO("user selected the target object");
+	return;
+//ROS_INFO("I heard: [%s]", msg->data.c_str());
 }
 
 visualization_msgs::MarkerArray visualizeObjectAxis(
@@ -949,12 +968,14 @@ void moveArmToPose(Eigen::Vector3d position, Eigen::Vector3d orientation){
 
 	moveToPose.request.pos_x = position.x();
 	moveToPose.request.pos_y = position.y();
+	double topMovementConstaint = 0.175+table_z_position; //was 0.1
+	double sideMovementConstaint = 0.075+table_z_position; //was 0
 
-	if(fabs(orientation.y()-3.14) < 0.1 && position.z() < 0.1){
-		position.z()= 0.1;
+	if(fabs(orientation.y()-3.14) < 0.1 && position.z() < topMovementConstaint ){
+		position.z()= topMovementConstaint;
 		ROS_ERROR("In top strategy, colliding with the table");
-	}else if (fabs(orientation.y()-1.57)< 0.1 && position.z() < 0){
-		position.z()= 0;
+	}else if (fabs(orientation.y()-1.57)< 0.1 && position.z() < sideMovementConstaint){
+		position.z()= sideMovementConstaint;
 		ROS_ERROR("In side strategy, colliding with the table");
 	}
 	moveToPose.request.pos_z = position.z();
@@ -1003,6 +1024,31 @@ void moveArmToPosition(Eigen::Vector3d position){
 				, position.y(), position.z());
 	}
 
+}
+
+void makeButtonMarker( const tf::Vector3& position )
+ {
+	//interactiveMarker int_marker;
+//	interactive_markers int_marker;
+//	int_marker.header.frame_id = "base_link";
+//	tf::pointTFToMsg(position, int_marker.pose.position);
+//    int_marker.scale = 1;
+//
+//    int_marker.name = "button";
+//    int_marker.description = "Button\n(Left Click)";
+//
+//    InteractiveMarkerControl control;
+//
+//    control.interaction_mode = InteractiveMarkerControl::BUTTON;
+//    control.name = "button_control";
+//
+//    Marker marker = makeBox( int_marker );
+//    control.markers.push_back( marker );
+//    control.always_visible = true;
+//    int_marker.controls.push_back(control);
+//
+//    server->insert(int_marker);
+//    server->setCallback(int_marker.name, &processFeedback);
 }
 
 
@@ -1076,10 +1122,15 @@ int main(int argc, char *argv[]) {
 	ros::ServiceServer service = nh_.advertiseService("graspNearestObject",
 			graspNearestObject);
 
+	 ros::Subscriber sub = nh_.subscribe("/clicked_point", 1000, clicked_point_rviz);
+
 	while (ros::ok()) {
 
 
+
 		double current_time = ros::Time::now().toSec();
+
+		nh_.getParam("/preprocessing/table_z", table_z_position);
 
 		if (getToolPosSrv.call(getToolPose))
 						{
@@ -1104,7 +1155,7 @@ int main(int argc, char *argv[]) {
 				ros::topic::waitForMessage<pcl::PointCloud<pcl::PointXYZ> >(
 						topic, nh_, ros::Duration(10.0));
 
-		if (!table_top_cloud_prt or table_top_cloud_prt->points.size() < 50) {
+		if ((!table_top_cloud_prt or table_top_cloud_prt->points.size() < 50) and !grasp_execution) {
 			ROS_ERROR(
 					"unknown_object_grasping: no table top cloud prt has been received, check the preproicessing node");
 
@@ -1218,7 +1269,7 @@ int main(int argc, char *argv[]) {
 				}else if(pickUpState){
 					ROS_INFO("Picking Up the object");
 					Eigen::Vector3d pickUpPoint;
-					pickUpPoint<< graspPoint.x(),graspPoint.y(),0.12;
+					pickUpPoint<< graspPoint.x(),graspPoint.y(),graspPoint.z()+0.03;
 					moveArmToPose(pickUpPoint,graspOrientation);
 					bool isPreGraspFinished=false;
 					nh_.getParam("/GoToPose_service/inGoalPose", isPreGraspFinished);
@@ -1231,7 +1282,7 @@ int main(int argc, char *argv[]) {
 				}else if(moveState){
 					ROS_INFO("move the object");
 					Eigen::Vector3d movePoint;
-					movePoint<< graspPoint.x(),0.2,0.12;
+					movePoint<< 0.2, 0.3,graspPoint.z()+0.1;
 					moveArmToPose(movePoint,graspOrientation);
 					bool isPreGraspFinished=false;
 					nh_.getParam("/GoToPose_service/inGoalPose", isPreGraspFinished);
@@ -1244,8 +1295,20 @@ int main(int argc, char *argv[]) {
 				}else if(placeState){
 					ROS_INFO("place the object");
 					Eigen::Vector3d movePoint;
-					movePoint<< graspPoint.x(),0.2, graspPoint.z()+0.005;
-					moveArmToPose(movePoint,graspOrientation);
+					Eigen::Vector3d moveOrientation = graspOrientation;
+//					movePoint<< graspPoint.x(),0.2, graspPoint.z()+0.005;
+//					moveArmToPose(movePoint,graspOrientation);
+					if(grasp.sideStrategy){
+						moveOrientation.z()=3.14/2;
+						movePoint<< 0, 0.25,0.25;
+					}
+
+					if(grasp.topStrategy){
+											//moveOrientation.z()=3.14/2;
+											movePoint<< 0, 0.25,0.3;
+					}
+					moveArmToPose(movePoint,moveOrientation);
+
 					bool isPreGraspFinished=false;
 					nh_.getParam("/GoToPose_service/inGoalPose", isPreGraspFinished);
 
@@ -1271,18 +1334,32 @@ int main(int argc, char *argv[]) {
 				}else if(HomeState){
 					ROS_INFO("home state");
 					Eigen::Vector3d movePoint;
-					movePoint<< graspBehindPosition.x(),graspBehindPosition.y()+0.05, graspBehindPosition.z()+0.1;
-					moveArmToPose(movePoint,graspOrientation);
+					Eigen::Vector3d moveOrientation = graspOrientation;
+//					movePoint<< graspPoint.x(),0.2, graspPoint.z()+0.005;
+//					moveArmToPose(movePoint,graspOrientation);
+					if(grasp.sideStrategy){
+						moveOrientation.z()=3.14/2;
+						movePoint<< 0.2, 0.25, 0.3;
+					}
+
+					if(grasp.topStrategy){
+											//moveOrientation.z()=3.14/2;
+						movePoint<< 0.2, 0.25,0.3;
+					}
+					moveArmToPose(movePoint,moveOrientation);
 					bool isPreGraspFinished=false;
 					nh_.getParam("/GoToPose_service/inGoalPose", isPreGraspFinished);
 
 					if((isPreGraspFinished && (currentArmPosition-targetArmPosition).norm()<0.01) || current_time - graspBeginTime > 18 ){
 						HomeState = false;
 					}
-
+					graspBeginTime = current_time;
 				}else{
 					ROS_INFO("home state");
-					grasp_execution = false;
+					if(current_time - graspBeginTime > 7){
+						grasp_execution = false;
+					}
+
 					if (homePoseSrv.call(srv)) {
 						ROS_INFO("calling home arm sortIndex is not possible");
 					} else {
