@@ -1,2 +1,2 @@
-{arm_base_frame: world, table_z_filter_max: -0.01, table_z_filter_min: -0.3, voxel_size: 0.0005, x_filter_max: 0.8,
+{arm_base_frame: world, table_z_filter_max: 0.3, table_z_filter_min: 0.01, voxel_size: 0.0005, x_filter_max: 0.8,
   x_filter_min: 0.3, y_filter_max: 0.4, y_filter_min: -0.02, z_filter_max: 0.4, z_filter_min: -0.1}

@@ -44,7 +44,7 @@
 
 #include <unknown_object_grasping/GraspingNearestObject.h>
 
-using namespace interactive_markers;
+//using namespace interactive_markers;
 
 typedef struct {
 	bool sideStrategy, topStrategy, flatStrategy;
@@ -57,7 +57,7 @@ typedef struct {
 	geometry_msgs::Point rightPoint;
 } grasp_width;
 
-boost::shared_ptr<InteractiveMarkerServer> server;
+
 
 ros::ServiceClient setToolPosSrv;
 ros::ServiceClient setToolPositionSrv;
@@ -900,11 +900,7 @@ visualization_msgs::MarkerArray visualizeObjectAxis(
 
 }
 
-bool graspNearestObject(
-		unknown_object_grasping::GraspingNearestObject::Request &req,
-		unknown_object_grasping::GraspingNearestObject::Response &res) {
-
-
+void objectGraspingandManipulation(){
 	grasp_execution = true;
 	preGraspState =true;
 	graspState =false;
@@ -959,6 +955,14 @@ bool graspNearestObject(
 		graspOrientation
 				<< (3.14 - (-1 * atan2(objectPose(0, 1), objectPose(1, 1)))), 3.14, 0;
 	}
+
+
+}
+
+bool graspNearestObject(
+		unknown_object_grasping::GraspingNearestObject::Request &req,
+		unknown_object_grasping::GraspingNearestObject::Response &res) {
+	objectGraspingandManipulation();
 
 }
 
@@ -1026,29 +1030,45 @@ void moveArmToPosition(Eigen::Vector3d position){
 
 }
 
-void makeButtonMarker( const tf::Vector3& position )
+void processFeedback(const visualization_msgs::InteractiveMarkerFeedbackConstPtr &feedback){
+	if(feedback->event_type == visualization_msgs::InteractiveMarkerFeedback::BUTTON_CLICK){
+		objectGraspingandManipulation();
+	}
+	else{
+		ROS_ERROR("In Object grasping command: wrong interaction");
+	}
+
+}
+
+void makeButtonMarker(boost::shared_ptr<interactive_markers::InteractiveMarkerServer> server, const tf::Vector3& position )
  {
-	//interactiveMarker int_marker;
-//	interactive_markers int_marker;
-//	int_marker.header.frame_id = "base_link";
-//	tf::pointTFToMsg(position, int_marker.pose.position);
-//    int_marker.scale = 1;
-//
-//    int_marker.name = "button";
-//    int_marker.description = "Button\n(Left Click)";
-//
-//    InteractiveMarkerControl control;
-//
-//    control.interaction_mode = InteractiveMarkerControl::BUTTON;
-//    control.name = "button_control";
-//
-//    Marker marker = makeBox( int_marker );
-//    control.markers.push_back( marker );
-//    control.always_visible = true;
-//    int_marker.controls.push_back(control);
-//
-//    server->insert(int_marker);
-//    server->setCallback(int_marker.name, &processFeedback);
+	visualization_msgs::InteractiveMarker int_marker;
+	int_marker.header.frame_id = "world";
+	tf::pointTFToMsg(position, int_marker.pose.position);
+    int_marker.scale = 1;
+    int_marker.name = "button";
+    int_marker.description = "Button\n(Left Click)";
+	visualization_msgs::InteractiveMarkerControl control;
+    //control.interaction_mode = visualization_msgs::InteractiveMarkerControl::BUTTON;
+	control.interaction_mode = visualization_msgs::InteractiveMarkerControl::BUTTON;
+	control.name = "button_control";
+    visualization_msgs::Marker marker;
+
+    marker.type =  visualization_msgs::Marker::CUBE;
+    marker.scale.x = int_marker.scale * 0.03;
+    marker.scale.y = int_marker.scale * 0.07;
+    marker.scale.z = int_marker.scale * 0.02;
+    marker.color.r = 0.5;
+    marker.color.g = 0.5;
+    marker.color.b = 0.5;
+    marker.color.a = 1.0;
+
+    control.markers.push_back( marker );
+    control.always_visible = true;
+    int_marker.controls.push_back(control);
+
+    server->insert(int_marker);
+    server->setCallback(int_marker.name, &processFeedback);
 }
 
 
@@ -1096,7 +1116,7 @@ int main(int argc, char *argv[]) {
 		//return 1;
 	}
 
-	ros::Duration(3).sleep();
+	ros::Duration(5).sleep();
 
 	INESC_Robotis_Driver::SetToolPose srv2;
 	srv2.request.pos_x = 0.2;
@@ -1124,8 +1144,10 @@ int main(int argc, char *argv[]) {
 
 	 ros::Subscriber sub = nh_.subscribe("/clicked_point", 1000, clicked_point_rviz);
 
-	while (ros::ok()) {
+	 boost::shared_ptr<interactive_markers::InteractiveMarkerServer> server(new interactive_markers::InteractiveMarkerServer("world"));
 
+
+	while (ros::ok()) {
 
 
 		double current_time = ros::Time::now().toSec();
@@ -1402,7 +1424,8 @@ int main(int argc, char *argv[]) {
 				// Grasp Pose detection
 				graspStrategyAndPointDetection(object_frame_points);
 
-				// for debugging
+				 tf::Vector3 positionMarkerIntractive(objectPose.translation().x(),objectPose.translation().y(),objectPose.translation().z()+0.15);
+				 makeButtonMarker(server , positionMarkerIntractive);
 
 				Eigen::Vector3d matchedPoint(
 							(grasp_pose.leftPoint.x + grasp_pose.rightPoint.x) / 2,
@@ -1462,10 +1485,14 @@ int main(int argc, char *argv[]) {
 			}
 
 		}
+
+		server->applyChanges();
+
 		ros::spinOnce();
 
 		loop_rate.sleep();
 
+		server->clear();
 	}
 
 	return 1;

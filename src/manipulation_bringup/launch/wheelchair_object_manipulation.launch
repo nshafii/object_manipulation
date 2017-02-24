@@ -9,7 +9,7 @@
 	<include file="$(find INESC_Robotis_Driver)/launch/robot_init.launch"/>    
 
 
-	<node pkg="tf" type="static_transform_publisher" name="static_transform_publisher" args="-0.41 0.27 0.83 0.0 0.7 -0.0  /world /camera_link 1000"/>
+	<node pkg="tf" type="static_transform_publisher" name="static_transform_publisher" args="-0.47 0.26 0.77 0.01 0.63 -0.1  /world /camera_link 1000"/>
 	
 
 	<node pkg="rviz" type="rviz" name="rviz"/>
@@ -17,6 +17,10 @@
 	<node pkg="preprocessing" type="preprocessing" name="preprocessing" output="screen">
 		<rosparam command="load" file="$(find preprocessing)/src/yaml/wheelchair.yaml" ns=""/>
 	</node>
+
+	<node pkg="unknown_object_grasping" type="unknown_object_grasping" name="unknown_object_grasping"/>
+
+
 </launch>
 
 

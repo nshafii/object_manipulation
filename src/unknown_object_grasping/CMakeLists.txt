@@ -12,8 +12,10 @@ find_package(catkin REQUIRED COMPONENTS
 	roscpp
 	tf
 	pcl_ros
-    	tf2_ros
+    tf2_ros
 	geometry_msgs
+	visualization_msgs
+	interactive_markers
 	sensor_msgs	
 	std_msgs
 	pluginlib 
