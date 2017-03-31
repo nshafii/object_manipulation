@@ -98,7 +98,7 @@ int main(int argc, char *argv[]) {
 
 	std::string topic = nh_.resolveName("/camera/depth/points");
 
-	ros::Duration(3.0).sleep();
+	ros::Duration(10.0).sleep();
 
 	while (ros::ok()) {
 		nh_.getParam("/preprocessing/arm_base_frame", arm_base_frame_);
@@ -223,7 +223,8 @@ int main(int argc, char *argv[]) {
 
 			if (table_coefficients_ptr->values.size() <= 3) {
 				ROS_INFO("Failed to detect table in scan");
-				return 0;
+				//return 0;
+				continue;
 			}
 
 			unsigned int inlier_threshold_ = 300;
@@ -233,7 +234,8 @@ int main(int argc, char *argv[]) {
 						(int )table_inliers_ptr->indices.size(),
 						inlier_threshold_);
 				ROS_ERROR("there is no flat table");
-				return 0;
+				//return 0;
+				continue;
 			}
 
 			ROS_INFO("Table found found with %d inliers: [%f %f %f %f].",

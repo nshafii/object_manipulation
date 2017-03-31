@@ -1116,7 +1116,7 @@ int main(int argc, char *argv[]) {
 		//return 1;
 	}
 
-	ros::Duration(5).sleep();
+	ros::Duration(20).sleep();
 
 	INESC_Robotis_Driver::SetToolPose srv2;
 	srv2.request.pos_x = 0.2;
